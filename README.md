@@ -229,7 +229,7 @@ Les logs HTTP sont activés en mode développement via Morgan.
 
 ## 📞 Support
 
-Pour toute question : [votre email]
+Pour toute question :dieynababalde36@gmail.com
 
 ## 📄 Licence
 
