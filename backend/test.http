@@ -1,0 +1,14 @@
+### Test connexion serveur
+GET http://localhost:3000
+
+### Test endpoint users (exemple)
+GET http://localhost:3000/api/users
+
+### Test POST (exemple)
+POST http://localhost:3000/api/users
+Content-Type: application/json
+
+{
+  "name": "Test User",
+  "email": "test@example.com"
+}
