@@ -41,3 +41,5 @@ coverage/
 # Temp
 tmp/
 temp/
+"list-files.js" 
+"backend/test-complet.js" 

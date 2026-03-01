@@ -1,60 +1,32 @@
-// import express from "express";
-// import dotenv from "dotenv";
-// import sequelize from "./src/config/db.js";
-// import "./src/models/Users.js";
-// import authRoutes from "./src/routes/auth.routes.js";
-
-// dotenv.config();
-
-// const app = express();
-// app.use(express.json());
-
-// const startServer = async () => {
-//     try {
-//         await sequelize.authenticate();
-//         console.log("DB connected");
-
-
-//         console.log("Tables created");
-
-//         console.log("DB synced");
-
-//         app.listen(process.env.PORT, () => {
-//         console.log(`Server running on port ${process.env.PORT}`);
-//         });
-
-//     } catch (error) {
-//         console.error("DB error:", error);
-//     }
-// };
-// app.use("/api/auth", authRoutes);
-
-
-// app.get("/", (req, res) => {
-// res.send("API Liguey Connect is running ");
-// });
-
-// startServer();
-
+// ✅ CORRECTION 1 : dotenv EN PREMIER — avant tout import qui lit process.env
+// En ESM, "import dotenv from dotenv + dotenv.config()" s'exécutait APRÈS les
+// autres imports, donc corsConfig lisait FRONTEND_URL=undefined au démarrage.
+import "dotenv/config";
 
 import express from "express";
-import dotenv from "dotenv";
 import sequelize from "./src/config/db.js";
-import "./src/models/Users.js";
-import "./src/models/Profile.js";
-import "./src/models/Service.js";
-import "./src/models/Candidature.js"; 
-import "./src/models/Offre.js"; 
-import  "./src/models/Message.js"; 
-import "./src/models/Conversation.js";
-import profileRoutes from "./src/routes/profile.routes.js";
-import authRoutes from "./src/routes/auth.routes.js";
-import serviceRoutes from "./src/routes/service.routes.js";
-import offreRoutes from "./src/routes/offre.routes.js";
-import messageRoutes from "./src/routes/message.routes.js";
+
+// ⚠️ ORDRE D'IMPORT IMPORTANT : Users et Profile d'abord
+import Users        from "./src/models/Users.js";
+import Profile      from "./src/models/Profile.js";
+// Puis les autres modèles qui dépendent de Users et Profile
+import Service      from "./src/models/Service.js";
+import Offre        from "./src/models/Offre.js";
+import Candidature  from "./src/models/Candidature.js";
+import Message      from "./src/models/Message.js";
+import Conversation from "./src/models/Conversation.js";
+
+import profileRoutes     from "./src/routes/profile.routes.js";
+import authRoutes        from "./src/routes/auth.routes.js";
+import serviceRoutes     from "./src/routes/service.routes.js";
+import offreRoutes       from "./src/routes/offre.routes.js";
+// ✅ CORRECTION 2 : import des routes candidatures (source des 404)
+import candidatureRoutes from "./src/routes/candidature.routes.js";
+import messageRoutes     from "./src/routes/message.routes.js";
+
 import { 
   helmetConfig, 
-  corsConfig, 
+  corsConfig,         // ✅ CORRECTION 3 : corsConfig doit lire FRONTEND_URL
   generalLimiter, 
   logger 
 } from "./src/middlewares/security.middleware.js";
@@ -63,9 +35,6 @@ import {
   errorHandler 
 } from "./src/middlewares/error.middleware.js";
 
-// Configuration des variables d'environnement
-dotenv.config();
-
 const app = express();
 
 /* ================= MIDDLEWARES DE SÉCURITÉ ================= */
@@ -73,11 +42,11 @@ const app = express();
 // Logging des requêtes
 app.use(logger);
 
-// Sécurité headers HTTP (Helmet)
-app.use(helmetConfig);
-
-// CORS
+// CORS — doit être AVANT express.json et toutes les routes
 app.use(corsConfig);
+
+// Gestion des requêtes OPTIONS (preflight CORS)
+app.options('*', corsConfig);
 
 // Rate limiting général
 app.use(generalLimiter);
@@ -88,71 +57,206 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 /* ================= ROUTES ================= */
 
-// Route de test
+// Route de test avec info sur les 4 rôles
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "API Liguey Connect is running 🚀",
-    version: "1.0.0"
+    version: "2.0.0",
+    description: "Plateforme hybride de mise en relation professionnelle au Sénégal",
+    roles: {
+      prestataire: {
+        icon: "🔧",
+        description: "Travailleur indépendant proposant des services à la tâche",
+        exemples: ["Plombier", "Électricien", "Mécanicien", "Maçon"]
+      },
+      demandeur_emploi: {
+        icon: "💼",
+        description: "Personne cherchant un emploi stable (CDI/CDD)",
+        exemples: ["Gardien", "Chauffeur", "Ouvrier"]
+      },
+      recruteur: {
+        icon: "🏢",
+        description: "Entreprise cherchant à recruter",
+        exemples: ["Restaurant", "Société BTP", "Commerce"]
+      },
+      client: {
+        icon: "🛍️",
+        description: "Particulier cherchant des services ponctuels",
+        exemples: ["Famille", "Propriétaire", "Particulier"]
+      }
+    },
+    endpoints: {
+      auth: "/api/auth",
+      profiles: "/api/profiles",
+      services: "/api/services",
+      offres: "/api/offres",
+      messages: "/api/messages"
+    }
   });
 });
 
-// Routes d'authentification
-app.use("/api/auth", authRoutes);
-app.use ("/api/profiles", profileRoutes);
+// Health check amélioré
+app.get("/health", async (req, res) => {
+  try {
+    await sequelize.authenticate();
+    
+    const stats = await Users.findAll({
+      attributes: [
+        'role',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+      ],
+      group: ['role']
+    });
+
+    res.json({
+      success: true,
+      status: "OK",
+      timestamp: new Date().toISOString(),
+      database: "connected",
+      environment: process.env.NODE_ENV || "development",
+      statistics: stats.reduce((acc, stat) => {
+        acc[stat.role] = parseInt(stat.get('count'));
+        return acc;
+      }, {})
+    });
+  } catch (error) {
+    res.status(503).json({
+      success: false,
+      status: "ERROR",
+      timestamp: new Date().toISOString(),
+      database: "disconnected",
+      error: error.message
+    });
+  }
+});
+
+// Routes
+app.use("/api/auth",     authRoutes);
+app.use("/api/profiles", profileRoutes);
 app.use("/api/services", serviceRoutes);
-app.use("/api/offres", offreRoutes);
+app.use("/api/offres",   offreRoutes);
+// ✅ CORRECTION 4 : candidatureRoutes monté sur /api/offres
+// → expose GET  /api/offres/candidatures       (appelé par CandidatureList.jsx)
+// → expose POST /api/offres/:offreId/postuler  (appelé par OffrePostuler.jsx)
+// ⚠️  Doit être après offreRoutes mais la route statique /candidatures
+//     dans candidature.routes.js sera matchée avant /:offreId grâce à l'ordre
+//     de déclaration dans le fichier de routes.
+app.use("/api/offres",   candidatureRoutes);
 app.use("/api/messages", messageRoutes);
-
-// Health check
-app.get("/health", (req, res) => {
-  res.json({
-    success: true,
-    status: "OK",
-    timestamp: new Date().toISOString()
-  });
-});
 
 /* ================= GESTION DES ERREURS ================= */
 
-// Route non trouvée (404)
 app.use(notFoundHandler);
-
-// Gestionnaire d'erreurs global
 app.use(errorHandler);
 
 /* ================= DÉMARRAGE DU SERVEUR ================= */
 
 const startServer = async () => {
   try {
-    // Test de connexion à la base de données
+    console.log("🔄 Démarrage de Liguey Connect API...\n");
+
     await sequelize.authenticate();
-    console.log(" Connexion à la base de données réussie");
+    console.log("✅ Connexion à la base de données réussie");
 
-
-    // Synchronisation des modèles (sans force: true en production)
-    console.log("NODE_ENV =", process.env.NODE_ENV);
     if (process.env.NODE_ENV === "development") {
-      //await sequelize.sync({ alter: true });
-      await sequelize.sync({ force: true });
-      console.log(" Tables synchronisées (mode development)");
+      await sequelize.sync({ alter: true });
+      console.log("✅ Tables synchronisées (mode development)");
     } else {
       await sequelize.sync();
-      console.log(" Tables synchronisées (mode production)");
+      console.log("✅ Tables synchronisées (mode production)");
     }
 
-    // Démarrage du serveur
-    const PORT = process.env.PORT || 3000;
+    const roles = await Users.findAll({
+      attributes: [[sequelize.fn('DISTINCT', sequelize.col('role')), 'role']],
+      raw: true
+    });
+    
+    const availableRoles = roles.map(r => r.role);
+    console.log("📋 Rôles détectés:", availableRoles.length > 0 ? availableRoles.join(', ') : 'Aucun utilisateur');
+
+    // ✅ process.env.PORT en premier — Render l'injecte automatiquement
+    const PORT = process.env.PORT || 5000;
     app.listen(PORT, () => {
-      console.log(`Serveur démarré sur le port ${PORT}`);
-      console.log(`Environnement: ${process.env.NODE_ENV || "development"}`);
-      console.log(`URL: http://localhost:${PORT}`);
+      console.log(`
+╔════════════════════════════════════════════════════════════╗
+║                                                            ║
+║           🚀 LIGUEY CONNECT API v2.0                      ║
+║           Plateforme Hybride d'Emploi au Sénégal 🇸🇳       ║
+║                                                            ║
+╠════════════════════════════════════════════════════════════╣
+║                                                            ║
+║  📡 Serveur:        http://localhost:${PORT.toString().padEnd(23)} ║
+║  📍 Environnement:  ${(process.env.NODE_ENV || 'development').padEnd(33)} ║
+║  🌐 CORS:           ${(process.env.FRONTEND_URL || 'http://localhost:5173').padEnd(33)} ║
+║  🗄️  Base:           ${(process.env.DB_NAME || 'liguey_connect').padEnd(33)} ║
+║                                                            ║
+╠════════════════════════════════════════════════════════════╣
+║                                                            ║
+║  👥 Rôles Supportés:                                      ║
+║                                                            ║
+║     🔧 Prestataire        → Services à la tâche          ║
+║                              (Plombier, Électricien...)   ║
+║                                                            ║
+║     💼 Demandeur d'emploi → Emploi stable (CDI/CDD)      ║
+║                              (Gardien, Chauffeur...)      ║
+║                                                            ║
+║     🏢 Recruteur          → Entreprise qui recrute       ║
+║                              (Restaurant, BTP...)         ║
+║                                                            ║
+║     🛍️  Client             → Particulier                  ║
+║                              (Famille, Propriétaire...)   ║
+║                                                            ║
+╠════════════════════════════════════════════════════════════╣
+║                                                            ║
+║  📚 Documentation:  http://localhost:${PORT}                  ║
+║  ❤️  Health Check:   http://localhost:${PORT}/health          ║
+║                                                            ║
+╚════════════════════════════════════════════════════════════╝
+      `);
+      console.log("✅ Serveur prêt à recevoir des requêtes!\n");
     });
 
   } catch (error) {
-    console.error("Erreur de démarrage:", error);
+    console.error("\n❌ ERREUR DE DÉMARRAGE:");
+    console.error("   Message:", error.message);
+    console.error("   Stack:", error.stack);
+    console.error("\n💡 Vérifications:");
+    console.error("   1. MySQL est démarré?");
+    console.error("   2. Fichier .env correctement configuré?");
+    console.error("   3. Base de données créée?");
+    console.error("   4. Migrations exécutées?\n");
     process.exit(1);
   }
 };
 
+// Gestion de l'arrêt gracieux
+const gracefulShutdown = async (signal) => {
+  console.log(`\n⚠️  ${signal} reçu. Arrêt gracieux...`);
+  try {
+    await sequelize.close();
+    console.log("✅ Connexion à la base de données fermée");
+    console.log("👋 Au revoir!\n");
+    process.exit(0);
+  } catch (error) {
+    console.error("❌ Erreur lors de la fermeture:", error);
+    process.exit(1);
+  }
+};
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT',  () => gracefulShutdown('SIGINT'));
+
+process.on('uncaughtException', (error) => {
+  console.error('❌ ERREUR NON CAPTURÉE:', error);
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ PROMESSE REJETÉE NON GÉRÉE:', reason);
+  gracefulShutdown('unhandledRejection');
+});
+
 startServer();
+
+export default app;

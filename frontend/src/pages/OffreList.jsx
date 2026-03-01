@@ -1,454 +1,368 @@
-    import { useState, useEffect } from "react";
-    import { useNavigate } from "react-router-dom";
-    import api from "../services/api";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import api from "../services/api";
 
-    export default function OffreSearch() {
-    const [offres, setOffres] = useState([]);
-    const [sectors, setSectors] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-    const navigate = useNavigate();
+// ✅ Sécurité : extrait le tableau de données quelle que soit la structure renvoyée
+const extractData = (responseData) => {
+  if (!responseData) return [];
+  if (Array.isArray(responseData)) return responseData;
+  if (Array.isArray(responseData.data)) return responseData.data;
+  return [];
+};
 
-    const [filters, setFilters] = useState({
-        contractType: "",
-        city: "",
-        sector: "",
-        search: ""
-    });
+const CONTRACT_LABELS = {
+  CDI:        { label: "CDI",        bg: "#E8F5E9", color: "#2E7D32" },
+  CDD:        { label: "CDD",        bg: "#E3F2FD", color: "#1565C0" },
+  stage:      { label: "Stage",      bg: "#FFF3E0", color: "#E65100" },
+  freelance:  { label: "Freelance",  bg: "#F3E5F5", color: "#6A1B9A" },
+  temporaire: { label: "Temporaire", bg: "#FCE4EC", color: "#880E4F" },
+};
 
-    useEffect(() => {
-        loadSectors();
-        searchOffres();
-    }, []);
+const STATUS_STYLES = {
+  active:   { bg: "#EDFAED", color: "#2E7D32", text: "✅ Active"   },
+  inactive: { bg: "#FDECEA", color: "#C62828", text: "❌ Inactive" },
+  expired:  { bg: "#FFF8E1", color: "#9E7C00", text: "⏰ Expirée"  },
+  filled:   { bg: "#E3F2FD", color: "#1565C0", text: "✔️ Pourvue"  },
+};
 
-    const loadSectors = async () => {
-        try {
-        const response = await api.get("/offres/sectors");
-        setSectors(response.data.data);
-        } catch (err) {
-        console.error("Erreur chargement secteurs:", err);
-        }
-    };
+// ─────────────────────────────────────────────────────────────────────────────
 
-    const searchOffres = async () => {
-        try {
-        setLoading(true);
-        setError("");
-        
-        const params = {};
-        if (filters.contractType) params.contractType = filters.contractType;
-        if (filters.city) params.city = filters.city;
-        if (filters.sector) params.sector = filters.sector;
-        if (filters.search) params.search = filters.search;
+export default function OffreList() {
+  const [offres, setOffres]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState("");
+  const navigate = useNavigate();
 
-        const response = await api.get("/offres/search", { params });
-        setOffres(response.data.data);
-        } catch (err) {
-        console.error("Erreur recherche:", err);
-        setError("Erreur lors de la recherche");
-        } finally {
-        setLoading(false);
-        }
-    };
+  // ── Vérification auth ────────────────────────────────────────────────────
+  useEffect(() => {
+    const userData = localStorage.getItem("user");
+    const token    = localStorage.getItem("token");
 
-    const handleFilterChange = (e) => {
-        const { name, value } = e.target;
-        setFilters(prev => ({
-        ...prev,
-        [name]: value
-        }));
-    };
+    if (!userData || !token) { navigate("/login"); return; }
 
-    const handleSearch = (e) => {
-        e.preventDefault();
-        searchOffres();
-    };
+    let parsedUser;
+    try { parsedUser = JSON.parse(userData); }
+    catch {
+      localStorage.removeItem("user");
+      localStorage.removeItem("token");
+      navigate("/login");
+      return;
+    }
 
-    const handleReset = () => {
-        setFilters({
-        contractType: "",
-        city: "",
-        sector: "",
-        search: ""
-        });
-        setTimeout(() => searchOffres(), 100);
-    };
+    if (parsedUser.role !== "recruteur") {
+      navigate("/dashboard");
+      return;
+    }
 
-    const handlePostuler = (offreId) => {
-        const token = localStorage.getItem("token");
-        if (!token) {
-        alert("Vous devez être connecté pour postuler");
+    loadOffres();
+  }, [navigate]);
+
+  // ── Chargement ───────────────────────────────────────────────────────────
+  const loadOffres = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      const response = await api.get("/offres/me");
+      setOffres(extractData(response.data));
+    } catch (err) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
         navigate("/login");
         return;
-        }
+      }
+      console.error("Erreur chargement offres:", err);
+      setError("Impossible de charger vos offres. Veuillez réessayer.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        const user = JSON.parse(localStorage.getItem("user"));
-        if (user.role !== "demandeur") {
-        alert("Seuls les demandeurs d'emploi peuvent postuler");
+  // ── Suppression ──────────────────────────────────────────────────────────
+  const handleDelete = async (id, title) => {
+    if (!confirm(`Supprimer l'offre "${title}" ? Cette action est irréversible.`)) return;
+
+    try {
+      await api.delete(`/offres/${id}`);
+      setOffres(prev => prev.filter(o => o.id !== id));
+    } catch (err) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem("user");
+        localStorage.removeItem("token");
+        navigate("/login");
         return;
-        }
+      }
+      alert("Erreur lors de la suppression. Veuillez réessayer.");
+      console.error("Erreur suppression offre:", err);
+    }
+  };
 
-        navigate(`/offres/${offreId}/postuler`);
-    };
-
-    const villes = [
-        "Dakar", "Pikine", "Guédiawaye", "Rufisque", "Thiès", "Kaolack", 
-        "Mbour", "Saint-Louis", "Ziguinchor", "Louga", "Matam", "Tambacounda",
-        "Kolda", "Kaffrine", "Kédougou", "Sédhiou", "Diourbel", "Fatick"
-    ];
-
+  // ── Helpers d'affichage ──────────────────────────────────────────────────
+  const getContractBadge = (type) => {
+    const style = CONTRACT_LABELS[type] || { label: type, bg: "#F0F0E8", color: "#333" };
     return (
-        <div style={{ minHeight: "100vh", background: "#F0F0E8", padding: "20px" }}>
-        <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
-            
-            {/* En-tête */}
-            <div style={{
-            background: "white",
-            padding: "20px",
-            borderRadius: "8px",
-            marginBottom: "20px",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center"
-            }}>
-            <div>
-                <h1 style={{ margin: 0, color: "#671E30", fontSize: "24px" }}>
-                Rechercher un emploi
-                </h1>
-                <p style={{ margin: "5px 0 0 0", color: "#666", fontSize: "14px" }}>
-                Trouvez l'opportunité qui vous correspond
-                </p>
-            </div>
+      <span style={{
+        background: style.bg, color: style.color,
+        padding: "3px 10px", borderRadius: "20px",
+        fontSize: "12px", fontWeight: "700",
+        border: `1px solid ${style.color}33`,
+        whiteSpace: "nowrap",
+      }}>
+        {style.label}
+      </span>
+    );
+  };
+
+  const getStatusBadge = (status) => {
+    const style = STATUS_STYLES[status] || STATUS_STYLES.active;
+    return (
+      <span style={{
+        background: style.bg, color: style.color,
+        padding: "3px 10px", borderRadius: "20px",
+        fontSize: "12px", fontWeight: "700",
+        border: `1px solid ${style.color}33`,
+        whiteSpace: "nowrap",
+      }}>
+        {style.text}
+      </span>
+    );
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return null;
+    return new Date(dateStr).toLocaleDateString("fr-FR", {
+      day: "2-digit", month: "short", year: "numeric"
+    });
+  };
+
+  // ── Rendu ────────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <div style={{ padding: "20px", textAlign: "center", color: "#671E30", fontSize: "16px" }}>
+        Chargement de vos offres...
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#F0F0E8", padding: "20px" }}>
+      <div style={{ maxWidth: "1100px", margin: "0 auto" }}>
+
+        {/* En-tête */}
+        <div style={{
+          background: "white", padding: "20px", borderRadius: "8px",
+          marginBottom: "20px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          display: "flex", justifyContent: "space-between",
+          alignItems: "center", flexWrap: "wrap", gap: "10px",
+        }}>
+          <div>
+            <h1 style={{ margin: 0, color: "#671E30", fontSize: "24px" }}>Mes offres d'emploi</h1>
+            <p style={{ margin: "5px 0 0 0", color: "#666", fontSize: "14px" }}>
+              {offres.length} offre{offres.length > 1 ? "s" : ""} publiée{offres.length > 1 ? "s" : ""}
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: "10px" }}>
             <button
-                onClick={() => navigate("/dashboard")}
-                style={{
-                padding: "10px 20px",
-                background: "#CFA65B",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "bold"
-                }}
+              onClick={() => navigate("/dashboard")}
+              style={{ padding: "10px 20px", background: "#E8C17F", color: "#1A1A1A",
+                border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}
             >
-                Retour
+              Retour
             </button>
-            </div>
+            <button
+              onClick={() => navigate("/offres/create")}
+              style={{ padding: "10px 20px", background: "#671E30", color: "white",
+                border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}
+            >
+              ➕ Publier une nouvelle offre
+            </button>
+          </div>
+        </div>
 
-            {/* Filtres de recherche */}
-            <form onSubmit={handleSearch} style={{
-            background: "white",
-            padding: "20px",
-            borderRadius: "8px",
-            marginBottom: "20px",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-            }}>
-            <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                🔍 Filtres de recherche
-            </h3>
+        {/* Erreur */}
+        {error && (
+          <div style={{ background: "#FDECEA", border: "1px solid #FFCDD2",
+            padding: "15px", borderRadius: "4px", marginBottom: "20px", color: "#C62828" }}>
+            {error}
+          </div>
+        )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "15px", marginBottom: "15px" }}>
-                <div>
-                <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
-                    Type de contrat
-                </label>
-                <select
-                    name="contractType"
-                    value={filters.contractType}
-                    onChange={handleFilterChange}
-                    style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #ccc",
-                    borderRadius: "4px",
-                    background: "white"
-                    }}
-                >
-                    <option value="">Tous les types</option>
-                    <option value="CDI">CDI</option>
-                    <option value="CDD">CDD</option>
-                    <option value="stage">Stage</option>
-                    <option value="freelance">Freelance</option>
-                    <option value="temporaire">Temporaire</option>
-                </select>
-                </div>
+        {/* État vide */}
+        {offres.length === 0 ? (
+          <div style={{ background: "white", padding: "50px 40px", borderRadius: "8px",
+            textAlign: "center", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
+            <p style={{ fontSize: "52px", margin: "0 0 16px 0" }}>📋</p>
+            <h3 style={{ margin: "0 0 10px 0", color: "#671E30" }}>Aucune offre publiée</h3>
+            <p style={{ margin: "0 0 24px 0", color: "#666" }}>
+              Publiez votre première offre pour trouver les meilleurs candidats.
+            </p>
+            <button
+              onClick={() => navigate("/offres/create")}
+              style={{ padding: "12px 28px", background: "#671E30", color: "white",
+                border: "none", borderRadius: "4px", cursor: "pointer",
+                fontWeight: "bold", fontSize: "15px" }}
+            >
+              ➕ Publier une offre
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: "16px" }}>
+            {offres.map(offre => (
+              <div key={offre.id} style={{
+                background: "white", borderRadius: "8px",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                overflow: "hidden",
+              }}>
+                {/* Barre colorée selon le statut */}
+                <div style={{
+                  height: "4px",
+                  background: offre.status === "active" ? "#2E7D32"
+                    : offre.status === "filled"  ? "#1565C0"
+                    : offre.status === "expired" ? "#9E7C00"
+                    : "#C62828",
+                }} />
 
-                <div>
-                <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
-                    Ville
-                </label>
-                <select
-                    name="city"
-                    value={filters.city}
-                    onChange={handleFilterChange}
-                    style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #ccc",
-                    borderRadius: "4px",
-                    background: "white"
-                    }}
-                >
-                    <option value="">Toutes les villes</option>
-                    {villes.map(ville => (
-                    <option key={ville} value={ville}>{ville}</option>
-                    ))}
-                </select>
-                </div>
+                <div style={{ padding: "20px" }}>
+                  {/* Ligne titre + badges + actions */}
+                  <div style={{ display: "flex", justifyContent: "space-between",
+                    alignItems: "flex-start", flexWrap: "wrap", gap: "12px", marginBottom: "12px" }}>
 
-                <div>
-                <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
-                    Secteur
-                </label>
-                <select
-                    name="sector"
-                    value={filters.sector}
-                    onChange={handleFilterChange}
-                    style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #ccc",
-                    borderRadius: "4px",
-                    background: "white"
-                    }}
-                >
-                    <option value="">Tous les secteurs</option>
-                    {sectors.map(sector => (
-                    <option key={sector.value} value={sector.value}>
-                        {sector.label}
-                    </option>
-                    ))}
-                </select>
-                </div>
+                    <div style={{ flex: 1, minWidth: "200px" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center",
+                        flexWrap: "wrap", marginBottom: "8px" }}>
+                        <h3 style={{ margin: 0, color: "#671E30", fontSize: "18px" }}>
+                          {offre.title}
+                        </h3>
+                        {getContractBadge(offre.contractType || offre.contract_type)}
+                        {getStatusBadge(offre.status)}
+                      </div>
 
-                <div>
-                <label style={{ display: "block", marginBottom: "5px", fontWeight: "bold", fontSize: "14px" }}>
-                    Recherche
-                </label>
-                <input
-                    type="text"
-                    name="search"
-                    value={filters.search}
-                    onChange={handleFilterChange}
-                    placeholder="Mots-clés..."
-                    style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #ccc",
-                    borderRadius: "4px"
-                    }}
-                />
-                </div>
-            </div>
-
-            <div style={{ display: "flex", gap: "10px" }}>
-                <button
-                type="submit"
-                style={{
-                    flex: 1,
-                    padding: "12px",
-                    background: "#671E30",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "bold"
-                }}
-                >
-                🔍 Rechercher
-                </button>
-                <button
-                type="button"
-                onClick={handleReset}
-                style={{
-                    padding: "12px 24px",
-                    background: "#E8C17F",
-                    color: "#1A1A1A",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "bold"
-                }}
-                >
-                🔄 Réinitialiser
-                </button>
-            </div>
-            </form>
-
-            {/* Résultats */}
-            {error && (
-            <div style={{
-                background: "#fee",
-                border: "1px solid #fcc",
-                padding: "15px",
-                borderRadius: "4px",
-                marginBottom: "20px",
-                color: "#c33"
-            }}>
-                {error}
-            </div>
-            )}
-
-            {loading ? (
-            <div style={{ textAlign: "center", padding: "40px" }}>
-                Recherche en cours...
-            </div>
-            ) : offres.length === 0 ? (
-            <div style={{
-                background: "white",
-                padding: "40px",
-                borderRadius: "8px",
-                textAlign: "center",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-            }}>
-                <p style={{ fontSize: "48px", margin: "0 0 20px 0" }}>💼</p>
-                <h3 style={{ margin: "0 0 10px 0", color: "#671E30" }}>
-                Aucune offre trouvée
-                </h3>
-                <p style={{ margin: 0, color: "#666" }}>
-                Essayez de modifier vos critères de recherche
-                </p>
-            </div>
-            ) : (
-            <div>
-                <p style={{ marginBottom: "15px", color: "#666", fontSize: "14px" }}>
-                {offres.length} offre{offres.length > 1 ? 's' : ''} trouvée{offres.length > 1 ? 's' : ''}
-                </p>
-                <div style={{ display: "grid", gap: "20px" }}>
-                {offres.map(offre => (
-                    <div key={offre.id} style={{
-                    background: "white",
-                    padding: "20px",
-                    borderRadius: "8px",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                    transition: "transform 0.2s",
-                    cursor: "pointer"
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.transform = "translateY(-2px)"}
-                    onMouseLeave={(e) => e.currentTarget.style.transform = "translateY(0)"}
-                    >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", marginBottom: "15px" }}>
-                        <div style={{ flex: 1 }}>
-                        <div style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
-                            <h3 style={{ margin: 0, color: "#671E30", fontSize: "20px" }}>
-                            {offre.title}
-                            </h3>
-                            <span style={{
-                            background: "#E8C17F",
-                            color: "#1A1A1A",
-                            padding: "4px 8px",
-                            borderRadius: "4px",
-                            fontSize: "12px",
-                            fontWeight: "bold"
-                            }}>
-                            {offre.contractType}
-                            </span>
-                        </div>
-                        <p style={{ margin: "0 0 5px 0", color: "#666", fontSize: "14px" }}>
-                            📍 {offre.city}{offre.region && `, ${offre.region}`}
-                        </p>
-                        {offre.companyName && (
-                            <p style={{ margin: 0, color: "#CFA65B", fontSize: "14px", fontWeight: "bold" }}>
-                            🏢 {offre.companyName}
-                            </p>
-                        )}
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                        <p style={{ margin: "0 0 5px 0", fontSize: "18px", fontWeight: "bold", color: "#671E30" }}>
-                            {offre.salaryPeriod === "a_negocier" 
-                            ? "À négocier"
-                            : `${offre.salaryMin || 0} - ${offre.salaryMax || 0} FCFA`}
-                        </p>
-                        <p style={{ margin: 0, fontSize: "12px", color: "#666" }}>
-                            / {offre.salaryPeriod}
-                        </p>
-                        </div>
+                      {/* Infos secondaires */}
+                      <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "13px", color: "#666" }}>
+                        <span>📍 {offre.city}{offre.region ? `, ${offre.region}` : ""}</span>
+                        {offre.companyName || offre.company_name
+                          ? <span>🏢 {offre.companyName || offre.company_name}</span>
+                          : null}
+                        {offre.sector
+                          ? <span>🏷️ {offre.sector}</span>
+                          : null}
+                      </div>
                     </div>
 
-                    <p style={{ margin: "0 0 15px 0", color: "#333", lineHeight: "1.5" }}>
-                        {offre.description.length > 150 
-                        ? offre.description.substring(0, 150) + "..." 
+                    {/* Actions */}
+                    <div style={{ display: "flex", gap: "8px", flexShrink: 0, flexWrap: "wrap" }}>
+                      <button
+                        onClick={() => navigate(`/offres/${offre.id}/candidatures`)}
+                        style={{ padding: "8px 14px", background: "#671E30", color: "white",
+                          border: "none", borderRadius: "4px", cursor: "pointer",
+                          fontWeight: "bold", fontSize: "13px" }}
+                      >
+                        👥 Candidatures
+                        {(offre.applicationCount ?? offre.application_count ?? 0) > 0 && (
+                          <span style={{
+                            marginLeft: "6px", background: "#CFA65B", color: "#1A1A1A",
+                            borderRadius: "10px", padding: "1px 7px", fontSize: "11px",
+                          }}>
+                            {offre.applicationCount ?? offre.application_count}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => navigate(`/offres/edit/${offre.id}`)}
+                        style={{ padding: "8px 14px", background: "#CFA65B", color: "white",
+                          border: "none", borderRadius: "4px", cursor: "pointer",
+                          fontWeight: "bold", fontSize: "13px" }}
+                      >
+                        ✏️ Modifier
+                      </button>
+                      <button
+                        onClick={() => handleDelete(offre.id, offre.title)}
+                        style={{ padding: "8px 14px", background: "#C62828", color: "white",
+                          border: "none", borderRadius: "4px", cursor: "pointer",
+                          fontWeight: "bold", fontSize: "13px" }}
+                      >
+                        🗑️ Supprimer
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Description tronquée */}
+                  {offre.description && (
+                    <p style={{ margin: "0 0 14px 0", color: "#444", fontSize: "14px",
+                      lineHeight: "1.6", borderTop: "1px solid #F0F0E8", paddingTop: "12px" }}>
+                      {offre.description.length > 220
+                        ? offre.description.substring(0, 220).trimEnd() + "…"
                         : offre.description}
                     </p>
+                  )}
 
-                    {/* Info entreprise */}
-                    {offre.profile && (
-                        <div style={{ 
-                        display: "flex", 
-                        justifyContent: "space-between", 
-                        alignItems: "center",
-                        padding: "15px",
-                        background: "#F0F0E8",
-                        borderRadius: "4px",
-                        marginBottom: "15px"
-                        }}>
-                        <div>
-                            <p style={{ margin: "0 0 5px 0", fontWeight: "bold", color: "#333" }}>
-                            🏢 {offre.profile.companyName || `${offre.profile.firstName} ${offre.profile.lastName}`}
-                            </p>
-                            <p style={{ margin: 0, fontSize: "14px", color: "#666" }}>
-                            📅 Publiée le {new Date(offre.createdAt).toLocaleDateString('fr-FR')}
-                            </p>
-                        </div>
-                        {offre.applicationDeadline && (
-                            <div>
-                            <p style={{ margin: 0, fontSize: "12px", color: "#666" }}>
-                                ⏰ Date limite : {new Date(offre.applicationDeadline).toLocaleDateString('fr-FR')}
-                            </p>
-                            </div>
-                        )}
-                        </div>
-                    )}
-
-                    {offre.skills && offre.skills.length > 0 && (
-                        <div style={{ marginBottom: "15px" }}>
-                        <p style={{ margin: "0 0 8px 0", fontSize: "12px", color: "#666", fontWeight: "bold" }}>
-                            🎯 Compétences recherchées :
-                        </p>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
-                            {offre.skills.slice(0, 5).map((skill, index) => (
-                            <span key={index} style={{
-                                background: "#E8C17F",
-                                color: "#1A1A1A",
-                                padding: "4px 8px",
-                                borderRadius: "4px",
-                                fontSize: "12px"
-                            }}>
-                                {skill}
-                            </span>
-                            ))}
-                            {offre.skills.length > 5 && (
-                            <span style={{ fontSize: "12px", color: "#666" }}>
-                                +{offre.skills.length - 5} autres
-                            </span>
-                            )}
-                        </div>
-                        </div>
-                    )}
-
-                    <button
-                        onClick={() => handlePostuler(offre.id)}
-                        style={{
-                        width: "100%",
-                        padding: "12px",
-                        background: "#671E30",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        fontWeight: "bold",
-                        fontSize: "16px"
-                        }}
-                    >
-                        📨 Postuler
-                    </button>
+                  {/* Statistiques + dates */}
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+                    gap: "12px", padding: "12px 14px",
+                    background: "#F0F0E8", borderRadius: "4px",
+                  }}>
+                    <div>
+                      <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
+                        👥 Candidatures
+                      </p>
+                      <p style={{ margin: 0, fontSize: "15px", fontWeight: "700",
+                        color: (offre.applicationCount ?? offre.application_count ?? 0) > 0 ? "#2E7D32" : "#666" }}>
+                        {offre.applicationCount ?? offre.application_count ?? 0}
+                      </p>
                     </div>
-                ))}
+
+                    <div>
+                      <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
+                        👁️ Vues
+                      </p>
+                      <p style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#333" }}>
+                        {offre.viewCount ?? offre.view_count ?? 0}
+                      </p>
+                    </div>
+
+                    <div>
+                      <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
+                        📅 Publiée le
+                      </p>
+                      <p style={{ margin: 0, fontSize: "13px", color: "#333" }}>
+                        {formatDate(offre.createdAt || offre.created_at) || "—"}
+                      </p>
+                    </div>
+
+                    {(offre.applicationDeadline || offre.application_deadline) && (
+                      <div>
+                        <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
+                          ⏳ Clôture
+                        </p>
+                        <p style={{ margin: 0, fontSize: "13px", color: "#C62828", fontWeight: "600" }}>
+                          {formatDate(offre.applicationDeadline || offre.application_deadline)}
+                        </p>
+                      </div>
+                    )}
+
+                    {(offre.salaryMin || offre.salary_min) && (
+                      <div>
+                        <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
+                          💰 Salaire
+                        </p>
+                        <p style={{ margin: 0, fontSize: "13px", color: "#333" }}>
+                          {(offre.salaryMin ?? offre.salary_min ?? 0).toLocaleString("fr-FR")}
+                          {(offre.salaryMax || offre.salary_max)
+                            ? ` – ${(offre.salaryMax ?? offre.salary_max).toLocaleString("fr-FR")}`
+                            : ""}
+                          {" "}FCFA
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-            </div>
-            )}
-        </div>
-        </div>
-    );
-    }
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

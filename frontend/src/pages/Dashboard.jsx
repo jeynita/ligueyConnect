@@ -1,19 +1,45 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../services/api";
+import api from "../services/api";
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
+  const [stats, setStats] = useState({ serviceCount: null }); // null = chargement en cours
   const navigate = useNavigate();
 
   useEffect(() => {
     const userData = localStorage.getItem("user");
     if (userData) {
-      setUser(JSON.parse(userData));
+      const parsedUser = JSON.parse(userData);
+      setUser(parsedUser);
+
+      // ✅ Chargement des stats selon le rôle
+      if (parsedUser.role === "prestataire") {
+        loadServiceStats();
+      }
     } else {
       navigate("/login");
     }
   }, [navigate]);
+
+  const loadServiceStats = async () => {
+    try {
+      const response = await api.get("/services/me");
+      const count = response.data?.count ?? response.data?.data?.length ?? 0;
+      setStats({ serviceCount: count });
+    } catch (err) {
+      console.error("Erreur chargement stats services:", err);
+      setStats({ serviceCount: 0 });
+    }
+  };
+
+  const getServiceCountLabel = () => {
+    const { serviceCount } = stats;
+    if (serviceCount === null) return "Chargement...";
+    if (serviceCount === 0) return "Aucun service publié";
+    return `${serviceCount} service${serviceCount > 1 ? "s" : ""} en ligne`;
+  };
 
   const handleLogout = () => {
     logout();
@@ -92,9 +118,9 @@ export default function Dashboard() {
         <p style={{ margin: "10px 0 0 0", fontSize: "16px", opacity: 0.9 }}>
           {user.email}
         </p>
-        <p style={{ 
-          margin: "10px 0 0 0", 
-          fontSize: "14px", 
+        <p style={{
+          margin: "10px 0 0 0",
+          fontSize: "14px",
           background: "rgba(255,255,255,0.2)",
           padding: "5px 10px",
           borderRadius: "4px",
@@ -106,7 +132,7 @@ export default function Dashboard() {
 
       {/* Contenu selon le rôle */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-        
+
         {/* Carte : Mon profil */}
         <div style={{
           background: "white",
@@ -120,7 +146,7 @@ export default function Dashboard() {
           <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
             Complétez votre profil pour être plus visible
           </p>
-          <button 
+          <button
             onClick={() => navigate("/profile/edit")}
             style={{
               padding: "10px 15px",
@@ -200,7 +226,7 @@ export default function Dashboard() {
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
                 Consultez les offres CDD, CDI et missions
               </p>
-              <button 
+              <button
                 onClick={() => navigate("/offres/search")}
                 style={{
                   padding: "10px 15px",
@@ -229,7 +255,7 @@ export default function Dashboard() {
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
                 Aucune candidature envoyée
               </p>
-              <button 
+              <button
                 onClick={() => navigate("/offres/candidatures")}
                 style={{
                   padding: "10px 15px",
@@ -289,10 +315,22 @@ export default function Dashboard() {
               <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
                 📊 Mes services
               </h3>
-              <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
-                Aucun service publié
+
+              {/* ✅ Texte dynamique selon l'état du chargement et le count */}
+              <p style={{
+                margin: "0 0 10px 0",
+                fontSize: "14px",
+                color: stats.serviceCount === null
+                  ? "#999"                          // chargement
+                  : stats.serviceCount > 0
+                    ? "#2E7D32"                     // services actifs → vert
+                    : "#666",                       // aucun service → gris
+                fontWeight: stats.serviceCount > 0 ? "600" : "normal",
+              }}>
+                {getServiceCountLabel()}
               </p>
-              <button 
+
+              <button
                 onClick={() => navigate("/services/me")}
                 style={{
                   padding: "10px 15px",
@@ -326,7 +364,7 @@ export default function Dashboard() {
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
                 Créez une offre d'emploi CDD, CDI ou mission
               </p>
-              <button 
+              <button
                 onClick={() => navigate("/offres/create")}
                 style={{
                   padding: "10px 15px",
@@ -355,7 +393,7 @@ export default function Dashboard() {
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
                 Aucune offre publiée
               </p>
-              <button 
+              <button
                 onClick={() => navigate("/offres/me")}
                 style={{
                   padding: "10px 15px",
@@ -388,17 +426,18 @@ export default function Dashboard() {
             Communiquez avec les utilisateurs
           </p>
           <button
-          onClick={() => navigate("/messages")}
-          style={{
-            padding: "10px 15px",
-            background: "#CFA65B",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            width: "100%",
-            fontWeight: "bold"
-          }}>
+            onClick={() => navigate("/messages")}
+            style={{
+              padding: "10px 15px",
+              background: "#CFA65B",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              width: "100%",
+              fontWeight: "bold"
+            }}
+          >
             Voir mes messages
           </button>
         </div>

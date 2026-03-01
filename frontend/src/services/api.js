@@ -1,160 +1,97 @@
-// // import axios from "axios";
-
-// // const api = axios.create({
-// //   baseURL: "http://localhost:5000/api",
-// // });
-
-// // api.interceptors.request.use((config) => {
-// //   const token = localStorage.getItem("token");
-// //   if (token) {
-// //     config.headers.Authorization = `Bearer ${token}`;
-// //   }
-// //   return config;
-// // });
-
-// // export default api;
-
-
-// // // const API_URL = "http://localhost:3000/api";
-
-// // // export async function login(email, password) {
-// // //   const res = await fetch(`${API_URL}/auth/login`, {
-// // //     method: "POST",
-// // //     headers: { "Content-Type": "application/json" },
-// // //     body: JSON.stringify({ email, password }),
-// // //   });
-
-// // //   return res.json();
-// // // }
-
-// import axios from "axios";
-
-// const API_URL = "http://localhost:5000/api"; // ⚠️ IMPORTANT: Port 5000 (ton backend)
-
-// const api = axios.create({
-//   baseURL: API_URL,
-//   headers: {
-//     "Content-Type": "application/json",
-//   },
-// });
-
-// // Intercepteur pour ajouter le token JWT automatiquement
-// api.interceptors.request.use(
-//   (config) => {
-//     const token = localStorage.getItem("token");
-//     if (token) {
-//       config.headers.Authorization = `Bearer ${token}`;
-//     }
-//     return config;
-//   },
-//   (error) => Promise.reject(error)
-// );
-
-// // ==================== FONCTION LOGIN ====================
-// export const login = async (email, password) => {
-//   try {
-//     const response = await api.post("/auth/login", { email, password });
-    
-//     // Sauvegarder le token
-//     if (response.data.token) {
-//       localStorage.setItem("token", response.data.token);
-//       localStorage.setItem("user", JSON.stringify(response.data.user));
-//     }
-    
-//     return response.data;
-//   } catch (error) {
-//     throw error.response?.data || error;
-//   }
-// };
-
-// // ==================== FONCTION REGISTER ====================
-// export const register = async (email, password, role) => {
-//   try {
-//     const response = await api.post("/auth/register", { email, password, role });
-    
-//     // Sauvegarder le token
-//     if (response.data.token) {
-//       localStorage.setItem("token", response.data.token);
-//       localStorage.setItem("user", JSON.stringify(response.data.user));
-//     }
-    
-//     return response.data;
-//   } catch (error) {
-//     throw error.response?.data || error;
-//   }
-// };
-
-// // ==================== FONCTION LOGOUT ====================
-// export const logout = () => {
-//   localStorage.removeItem("token");
-//   localStorage.removeItem("user");
-// };
-
-// // Export par défaut
-// export default api;
-
 import axios from "axios";
 
-const API_URL = "http://localhost:3000/api"; // ⬅️ PORT 3000 (ton backend)
+// ✅ Dev  → .env.local : VITE_API_URL=http://localhost:5000/api
+// ✅ Prod → Vercel env : VITE_API_URL=https://xxx.onrender.com/api
+// ⚠️  Ton server.js utilise /api (sans /v1) — on aligne ici
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
 const api = axios.create({
   baseURL: API_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
+  headers: { "Content-Type": "application/json" },
+  withCredentials: false, // false avec JWT Bearer, true seulement avec cookies
 });
 
-// Intercepteur pour ajouter le token JWT automatiquement
+// ── Intercepteur de requête ───────────────────────────────────────────────────
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (token) config.headers.Authorization = `Bearer ${token}`;
+
+    // Logs uniquement en développement
+    if (import.meta.env.DEV) {
+      console.log("📡 Appel API vers :", config.url);
+      console.log("🔑 TOKEN :", token ? "présent" : "ABSENT");
     }
+
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// ==================== FONCTION LOGIN ====================
+// ── Intercepteur de réponse ───────────────────────────────────────────────────
+api.interceptors.response.use(
+  (response) => response,
+
+  (error) => {
+    const status = error.response?.status;
+
+    if (import.meta.env.DEV) {
+      console.error(`🚨 Erreur API ${status ?? "réseau"} :`, {
+        url:     error.config?.url,
+        message: error.response?.data?.message,
+        data:    error.response?.data,
+      });
+    }
+
+    // ✅ À réactiver après stabilisation complète :
+    // if (status === 401) {
+    //   localStorage.removeItem("token");
+    //   localStorage.removeItem("user");
+    //   window.location.href = "/login";
+    // }
+
+    return Promise.reject(error);
+  }
+);
+
+// ── Helpers extraction token ──────────────────────────────────────────────────
+
+const extractAuthPayload = (responseData) => {
+  if (responseData?.data?.token) return { token: responseData.data.token, user: responseData.data.user ?? null };
+  if (responseData?.token)       return { token: responseData.token,      user: responseData.user      ?? null };
+  if (responseData?.data?.data?.token) return { token: responseData.data.data.token, user: responseData.data.data.user ?? null };
+  console.warn("⚠️ Structure auth inattendue :", responseData);
+  return null;
+};
+
+const saveAuthToStorage = ({ token, user }) => {
+  localStorage.setItem("token", token);
+  if (user) localStorage.setItem("user", JSON.stringify(user));
+};
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
 export const login = async (email, password) => {
-  try {
-    const response = await api.post("/auth/login", { email, password });
-    
-    // ⬅️ IMPORTANT: Ton backend retourne data.data.token (pas data.token)
-    if (response.data.success && response.data.data.token) {
-      localStorage.setItem("token", response.data.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data.data.user));
-    }
-    
-    return response.data.data; // Retourne { user, token }
-  } catch (error) {
-    throw error.response?.data || error;
-  }
+  const response = await api.post("/auth/login", { email, password });
+  if (import.meta.env.DEV) console.log("🔍 [login] response.data :", response.data);
+  const payload = extractAuthPayload(response.data);
+  if (!payload) throw new Error("Token introuvable dans la réponse du serveur.");
+  saveAuthToStorage(payload);
+  return payload;
 };
 
-// ==================== FONCTION REGISTER ====================
 export const register = async (email, password, role) => {
-  try {
-    const response = await api.post("/auth/register", { email, password, role });
-    
-    // Sauvegarder le token
-    if (response.data.success && response.data.data.token) {
-      localStorage.setItem("token", response.data.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data.data.user));
-    }
-    
-    return response.data.data; // Retourne { user, token }
-  } catch (error) {
-    throw error.response?.data || error;
-  }
+  const response = await api.post("/auth/register", { email, password, role });
+  if (import.meta.env.DEV) console.log("🔍 [register] response.data :", response.data);
+  const payload = extractAuthPayload(response.data);
+  if (!payload) throw new Error("Token introuvable dans la réponse du serveur.");
+  saveAuthToStorage(payload);
+  return payload;
 };
 
-// ==================== FONCTION LOGOUT ====================
 export const logout = () => {
   localStorage.removeItem("token");
   localStorage.removeItem("user");
 };
 
-// Export par défaut
 export default api;

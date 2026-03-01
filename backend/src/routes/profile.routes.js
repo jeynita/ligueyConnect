@@ -1,88 +1,151 @@
-    import express from "express";
-    import {
-    getProfile,
-    getMyProfile,
-    updateProfile,
-    searchProfiles
-    } from "../controllers/profile.controller.js";
-    import { verifyToken } from "../middlewares/auth.middleware.js";
-    import { body } from "express-validator";
-    import { validateRequest } from "../middlewares/validation.middleware.js";
+import express from 'express';
+import { verifyToken } from '../middlewares/auth.middleware.js';
+import Profile from '../models/Profile.js';
+import Users from '../models/Users.js';
+import { Op } from 'sequelize';
 
-    const router = express.Router();
+const router = express.Router();
 
-    /* ================= VALIDATION RULES ================= */
+/* ================= FONCTIONS D'AIDE ================= */
 
-    const updateProfileValidation = [
-    body("firstName")
-        .optional()
-        .trim()
-        .isLength({ max: 100 }).withMessage("Prénom trop long (max 100 caractères)"),
+const calculateProfileCompleteness = (profile, userRole) => {
+  const fields = {
+    common: ['firstName', 'lastName', 'phone', 'bio', 'city', 'region', 'profession', 'skills', 'experience'],
+    prestataire: ['hourlyRate', 'availability'],
+    demandeur_emploi: ['educationLevel'],
+    recruteur: ['companyName', 'companySize'],
+    client: []
+  };
+
+  const requiredFields = [...fields.common, ...(fields[userRole] || [])];
+  const filledFields = requiredFields.filter(field => {
+    const value = profile[field];
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'string') return value.trim() !== '';
+    return value !== null && value !== undefined;
+  });
+
+  return Math.round((filledFields.length / requiredFields.length) * 100);
+};
+
+/* ================= ROUTES ================= */
+
+/**
+ * @route   GET /api/profiles/me
+ */
+router.get('/me', verifyToken, async (req, res) => {
+  try {
+    const profile = await Profile.findOne({
+      where: { userId: req.user.id },
+      include: [{
+        model: Users,
+        as: 'user',
+        attributes: ['id', 'email', 'role']
+      }]
+    });
+
+    if (!profile) {
+      return res.json({ success: true, data: null, message: 'Aucun profil trouvé.' });
+    }
+
+    const profileData = profile.toJSON();
+    profileData.profileCompleteness = calculateProfileCompleteness(profileData, req.user.role);
+
+    res.json({ success: true, data: profileData });
+  } catch (error) {
+    console.error('Erreur Profile GET /me:', error);
+    res.status(500).json({ success: false, message: 'Erreur serveur', error: error.message });
+  }
+});
+
+/**
+ * @route   PUT /api/profiles/me
+ */
+router.put('/me', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    let profile = await Profile.findOne({ where: { userId } });
+
+    // Sécurité pour les champs JSON (skills)
+    const dataToSave = { ...req.body };
+    if (dataToSave.skills && typeof dataToSave.skills === 'string') {
+        try { dataToSave.skills = JSON.parse(dataToSave.skills); } catch (e) { /* déjà un objet */ }
+    }
+
+    if (!profile) {
+      profile = await Profile.create({ ...dataToSave, userId });
+    } else {
+      await profile.update(dataToSave);
+    }
+
+    const updatedProfile = await Profile.findOne({
+      where: { userId },
+      include: [{ model: Users, as: 'user', attributes: ['id', 'email', 'role'] }]
+    });
+
+    const profileData = updatedProfile.toJSON();
+    profileData.profileCompleteness = calculateProfileCompleteness(profileData, req.user.role);
+
+    res.json({ success: true, message: 'Profil enregistré avec succès', data: profileData });
+  } catch (error) {
+    console.error('Erreur Profile PUT /me:', error);
     
-    body("lastName")
-        .optional()
-        .trim()
-        .isLength({ max: 100 }).withMessage("Nom trop long (max 100 caractères)"),
-    
-    body("phone")
-        .optional()
-        .matches(/^(\+221)?[0-9]{9}$/).withMessage("Numéro de téléphone invalide (format: 771234567 ou +221771234567)"),
-    
-    body("bio")
-        .optional()
-        .trim()
-        .isLength({ max: 1000 }).withMessage("Bio trop longue (max 1000 caractères)"),
-    
-    body("city")
-        .optional()
-        .trim()
-        .isLength({ max: 100 }).withMessage("Ville trop longue"),
-    
-    body("profession")
-        .optional()
-        .trim()
-        .isLength({ max: 100 }).withMessage("Profession trop longue"),
-    
-    body("skills")
-        .optional()
-        .isArray().withMessage("Les compétences doivent être un tableau"),
-    
-    body("hourlyRate")
-        .optional()
-        .isFloat({ min: 0 }).withMessage("Le tarif horaire doit être un nombre positif"),
-    
-    body("availability")
-        .optional()
-        .isIn(['disponible', 'occupe', 'indisponible']).withMessage("Disponibilité invalide")
-    ];
+    // Si c'est une erreur de validation Sequelize (ex: format téléphone)
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({ success: false, message: error.errors[0].message });
+    }
 
-    /* ================= ROUTES ================= */
+    res.status(500).json({ success: false, message: 'Erreur lors de la sauvegarde', error: error.message });
+  }
+});
 
-    // POST /api/profiles - Créer/Mettre à jour son profil (authentifié)
-    router.post(
-    "/",
-    verifyToken,
-    updateProfileValidation,
-    validateRequest,
-    updateProfile
-    );
+/**
+ * @route   GET /api/profiles/search
+ */
+router.get('/search', async (req, res) => {
+  try {
+    const { role, city, profession, skills } = req.query;
+    const where = {};
+    const userWhere = {};
 
-    // GET /api/profiles/me - Mon profil (authentifié)
-    router.get("/me", verifyToken, getMyProfile);
+    if (role) userWhere.role = role;
+    if (city) where.city = city;
+    if (profession) where.profession = { [Op.like]: `%${profession}%` };
+    
+    // Recherche simplifiée pour les skills
+    if (skills) where.skills = { [Op.like]: `%${skills}%` };
 
-    // PUT /api/profiles/me - Mettre à jour mon profil (authentifié)
-    router.put(
-    "/me",
-    verifyToken,
-    updateProfileValidation,
-    validateRequest,
-    updateProfile
-    );
+    const profiles = await Profile.findAll({
+      where,
+      include: [{
+        model: Users,
+        as: 'user',
+        where: userWhere,
+        attributes: ['id', 'email', 'role']
+      }]
+    });
 
-    // GET /api/profiles/search - Rechercher des profils (public)
-    router.get("/search", searchProfiles);
+    res.json({ success: true, data: profiles });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 
-    // GET /api/profiles/:userId - Voir un profil spécifique (public)
-    router.get("/:userId", getProfile);
+/**
+ * @route   GET /api/profiles/:id
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const profile = await Profile.findByPk(req.params.id, {
+      include: [{ model: Users, as: 'user', attributes: ['id', 'email', 'role'] }]
+    });
 
-    export default router;
+    if (!profile) return res.status(404).json({ success: false, message: 'Profil introuvable' });
+
+    res.json({ success: true, data: profile });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+export default router;

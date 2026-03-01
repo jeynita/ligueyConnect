@@ -1,418 +1,358 @@
-// // // import { useState } from "react";
-
-// // // export default function Register() {
-// // //   const [email, setEmail] = useState("");
-// // //   const [password, setPassword] = useState("");
-
-// // //   const handleRegister = async (e) => {
-// // //     e.preventDefault();
-
-// // //     const res = await fetch("http://localhost:5000/api/auth/register", {
-// // //       method: "POST",
-// // //       headers: { "Content-Type": "application/json" },
-// // //       body: JSON.stringify({ email, password })
-// // //     });
-
-// // //     const data = await res.json();
-// // //     console.log(data);
-// // //   };
-
-// // //   return (
-// // //     <form onSubmit={handleRegister}>
-// // //       <input
-// // //         placeholder="Email"
-// // //         value={email}
-// // //         onChange={(e) => setEmail(e.target.value)}
-// // //       />
-// // //       <input
-// // //         type="password"
-// // //         placeholder="Password"
-// // //         value={password}
-// // //         onChange={(e) => setPassword(e.target.value)}
-// // //       />
-// // //       <button type="submit">Register</button>
-// // //     </form>
-// // //   );
-// // // }
-
-
-// // import { useState } from "react";
-// // import { register } from "../services/api";
-// // import { useNavigate } from "react-router-dom";
-
-// // export default function Register() {
-// //   const [email, setEmail] = useState("");
-// //   const [password, setPassword] = useState("");
-// //   const [role, setRole] = useState("demandeur"); // ⬅️ IMPORTANT: Champ manquant
-// //   const [error, setError] = useState("");
-// //   const [loading, setLoading] = useState(false);
-// //   const navigate = useNavigate();
-
-// //   const handleRegister = async (e) => {
-// //     e.preventDefault();
-// //     setError("");
-// //     setLoading(true);
-
-// //     try {
-// //       // Utilise la fonction register de api.js
-// //       const res = await register(email, password, role);
-// //       console.log("✅ Inscription réussie:", res);
-      
-// //       // Rediriger vers le dashboard
-// //       navigate("/dashboard");
-// //     } catch (err) {
-// //       console.error("❌ Erreur inscription:", err);
-// //       setError(err.error || err.errors?.[0]?.msg || "Erreur d'inscription");
-// //     } finally {
-// //       setLoading(false);
-// //     }
-// //   };
-
-// //   return (
-// //     <div style={{ padding: "20px", maxWidth: "400px", margin: "50px auto" }}>
-// //       <form onSubmit={handleRegister}>
-// //         <h1>Inscription</h1>
-
-// //         {/* Afficher les erreurs */}
-// //         {error && (
-// //           <div style={{ 
-// //             background: "#fee", 
-// //             border: "1px solid #fcc", 
-// //             padding: "10px", 
-// //             marginBottom: "10px",
-// //             borderRadius: "4px",
-// //             color: "#c33"
-// //           }}>
-// //             {error}
-// //           </div>
-// //         )}
-
-// //         {/* Email */}
-// //         <input
-// //           type="email"
-// //           placeholder="Email"
-// //           value={email}
-// //           onChange={(e) => setEmail(e.target.value)}
-// //           required
-// //           style={{ 
-// //             width: "100%", 
-// //             padding: "10px", 
-// //             marginBottom: "10px",
-// //             border: "1px solid #ccc",
-// //             borderRadius: "4px"
-// //           }}
-// //         />
-
-// //         {/* Mot de passe */}
-// //         <input
-// //           type="password"
-// //           placeholder="Mot de passe (min 8 caractères)"
-// //           value={password}
-// //           onChange={(e) => setPassword(e.target.value)}
-// //           required
-// //           minLength={8}
-// //           style={{ 
-// //             width: "100%", 
-// //             padding: "10px", 
-// //             marginBottom: "10px",
-// //             border: "1px solid #ccc",
-// //             borderRadius: "4px"
-// //           }}
-// //         />
-
-// //         {/* Rôle - CHAMP IMPORTANT */}
-// //         <select
-// //           value={role}
-// //           onChange={(e) => setRole(e.target.value)}
-// //           style={{ 
-// //             width: "100%", 
-// //             padding: "10px", 
-// //             marginBottom: "10px",
-// //             border: "1px solid #ccc",
-// //             borderRadius: "4px"
-// //           }}
-// //         >
-// //           <option value="demandeur">Demandeur d'emploi</option>
-// //           <option value="prestataire">Prestataire de services</option>
-// //           <option value="recruteur">Recruteur / Employeur</option>
-// //         </select>
-
-// //         {/* Bouton submit */}
-// //         <button 
-// //           type="submit" 
-// //           disabled={loading}
-// //           style={{ 
-// //             width: "100%", 
-// //             padding: "10px", 
-// //             background: "#671E30",
-// //             color: "white",
-// //             border: "none",
-// //             borderRadius: "4px",
-// //             cursor: loading ? "not-allowed" : "pointer",
-// //             opacity: loading ? 0.6 : 1
-// //           }}
-// //         >
-// //           {loading ? "Inscription..." : "S'inscrire"}
-// //         </button>
-
-// //         {/* Lien vers login */}
-// //         <p style={{ marginTop: "10px", textAlign: "center", fontSize: "14px" }}>
-// //           Déjà un compte ?{" "}
-// //           <a href="/login" style={{ color: "#671E30", textDecoration: "none" }}>
-// //             Se connecter
-// //           </a>
-// //         </p>
-// //       </form>
-// //     </div>
-// //   );
-// // }
-
-// import { useState } from "react";
-// import { register } from "../services/api";
-// import { useNavigate } from "react-router-dom";
-
-// export default function Register() {
-//   const [email, setEmail] = useState("");
-//   const [password, setPassword] = useState("");
-//   const [error, setError] = useState("");
-//   const [loading, setLoading] = useState(false);
-//   const navigate = useNavigate();
-
-//   const handleRegister = async (e) => {
-//     e.preventDefault();
-//     setError("");
-//     setLoading(true);
-
-//     try {
-//       const res = await register(email, password);
-//       console.log("✅ Inscription réussie:", res);
-      
-//       // Rediriger vers le dashboard
-//       navigate("/dashboard");
-//     } catch (err) {
-//       console.error("❌ Erreur:", err);
-      
-//       // Afficher le message d'erreur du backend
-//       if (err.errors && err.errors.length > 0) {
-//         setError(err.errors[0].message);
-//       } else {
-//         setError(err.message || "Erreur lors de l'inscription");
-//       }
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <div style={{ padding: "20px", maxWidth: "400px", margin: "50px auto" }}>
-//       <form onSubmit={handleRegister}>
-//         <h2>Inscription</h2>
-
-//         {error && (
-//           <div style={{ 
-//             background: "#fee", 
-//             border: "1px solid #fcc",
-//             padding: "10px",
-//             marginBottom: "10px",
-//             borderRadius: "4px",
-//             color: "#c33"
-//           }}>
-//             {error}
-//           </div>
-//         )}
-
-//         <input
-//           type="email"
-//           placeholder="Email"
-//           value={email}
-//           onChange={(e) => setEmail(e.target.value)}
-//           required
-//           style={{ 
-//             width: "100%", 
-//             padding: "10px", 
-//             marginBottom: "10px",
-//             border: "1px solid #ccc",
-//             borderRadius: "4px"
-//           }}
-//         />
-
-//         <input
-//           type="password"
-//           placeholder="Mot de passe (min 8 caractères, 1 maj, 1 min, 1 chiffre)"
-//           value={password}
-//           onChange={(e) => setPassword(e.target.value)}
-//           required
-//           minLength={8}
-//           style={{ 
-//             width: "100%", 
-//             padding: "10px", 
-//             marginBottom: "10px",
-//             border: "1px solid #ccc",
-//             borderRadius: "4px"
-//           }}
-//         />
-
-//         <button 
-//           type="submit" 
-//           disabled={loading}
-//           style={{ 
-//             width: "100%", 
-//             padding: "10px", 
-//             background: "#671E30",
-//             color: "white",
-//             border: "none",
-//             borderRadius: "4px",
-//             cursor: loading ? "not-allowed" : "pointer",
-//             opacity: loading ? 0.6 : 1
-//           }}
-//         >
-//           {loading ? "Inscription..." : "S'inscrire"}
-//         </button>
-
-//         <p style={{ marginTop: "10px", textAlign: "center", fontSize: "14px" }}>
-//           Déjà un compte ?{" "}
-//           <a href="/login" style={{ color: "#671E30", textDecoration: "none" }}>
-//             Se connecter
-//           </a>
-//         </p>
-//       </form>
-//     </div>
-//   );
-// }
-
 import { useState } from "react";
-import { register } from "../services/api";
 import { useNavigate } from "react-router-dom";
+import { register } from "../services/api";
 
 export default function Register() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [role, setRole] = useState("demandeur"); // ⬅️ NOUVEAU : Champ role
-  const [error, setError] = useState("");
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    confirmPassword: "",
+    role: "client"
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const navigate = useNavigate();
 
-  const handleRegister = async (e) => {
+  const roles = [
+    { value: "client", label: "🏠 Client", description: "Je cherche des prestataires" },
+    { value: "prestataire", label: "🔧 Prestataire", description: "Je propose des services" },
+    { value: "demandeur", label: "🔍 Demandeur d'emploi", description: "Je cherche un emploi" },
+    { value: "recruteur", label: "💼 Recruteur", description: "Je publie des offres d'emploi" }
+  ];
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    if (formData.password !== formData.confirmPassword) {
+      setError("Les mots de passe ne correspondent pas");
+      return;
+    }
+
+    if (formData.password.length < 8) {
+      setError("Le mot de passe doit contenir au moins 8 caractères");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const res = await register(email, password, role); // ⬅️ Passer le role
-      console.log("✅ Inscription réussie:", res);
-      
-      // Rediriger vers le dashboard
-      navigate("/dashboard");
-    } catch (err) {
-      console.error("❌ Erreur:", err);
-      
-      // Afficher le message d'erreur du backend
-      if (err.errors && err.errors.length > 0) {
-        setError(err.errors[0].message);
-      } else {
-        setError(err.message || "Erreur lors de l'inscription");
+      const data = await register(formData.email, formData.password, formData.role);
+      if (data && data.token) {
+        navigate("/dashboard");
       }
+    } catch (err) {
+      setError(err.message || "Erreur lors de l'inscription");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "400px", margin: "50px auto" }}>
-      <form onSubmit={handleRegister}>
-        <h2>Inscription - Liguey Connect</h2>
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(135deg, #671E30 0%, #CFA65B 100%)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "20px"
+    }}>
+      <div style={{
+        background: "white",
+        padding: "40px",
+        borderRadius: "8px",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
+        width: "100%",
+        maxWidth: "500px"
+      }}>
 
-        {error && (
-          <div style={{ 
-            background: "#fee", 
-            border: "1px solid #fcc",
-            padding: "10px",
-            marginBottom: "10px",
-            borderRadius: "4px",
-            color: "#c33"
+        {/* Logo / Titre */}
+        <div style={{ textAlign: "center", marginBottom: "30px" }}>
+          <h1 style={{
+            margin: "0 0 5px 0",
+            color: "#671E30",
+            fontSize: "32px",
+            fontWeight: "bold"
           }}>
-            {error}
+            🇸🇳 Liguey Connect
+          </h1>
+          <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>
+            Créez votre compte gratuitement
+          </p>
+        </div>
+
+        {/* Message d'erreur */}
+        {error && (
+          <div style={{
+            background: "#fee",
+            border: "1px solid #fcc",
+            padding: "12px",
+            borderRadius: "4px",
+            marginBottom: "20px",
+            color: "#c33",
+            fontSize: "14px",
+            textAlign: "center"
+          }}>
+            ❌ {error}
           </div>
         )}
 
-        {/* Email */}
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          style={{ 
-            width: "100%", 
-            padding: "10px", 
-            marginBottom: "10px",
-            border: "1px solid #ccc",
-            borderRadius: "4px"
-          }}
-        />
+        <form onSubmit={handleSubmit}>
 
-        {/* Mot de passe */}
-        <input
-          type="password"
-          placeholder="Mot de passe (min 8 car, 1 maj, 1 min, 1 chiffre)"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          minLength={8}
-          style={{ 
-            width: "100%", 
-            padding: "10px", 
-            marginBottom: "10px",
-            border: "1px solid #ccc",
-            borderRadius: "4px"
-          }}
-        />
+          {/* Choix du rôle */}
+          <div style={{ marginBottom: "20px" }}>
+            <label style={{
+              display: "block",
+              marginBottom: "10px",
+              color: "#333",
+              fontWeight: "500",
+              fontSize: "14px"
+            }}>
+              Je suis...
+            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              {roles.map(role => (
+                <div
+                  key={role.value}
+                  onClick={() => setFormData(prev => ({ ...prev, role: role.value }))}
+                  style={{
+                    padding: "12px",
+                    border: `2px solid ${formData.role === role.value ? "#671E30" : "#ddd"}`,
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    background: formData.role === role.value ? "#FFF5F5" : "white",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  <p style={{
+                    margin: "0 0 3px 0",
+                    fontWeight: "bold",
+                    fontSize: "13px",
+                    color: formData.role === role.value ? "#671E30" : "#333"
+                  }}>
+                    {role.label}
+                  </p>
+                  <p style={{
+                    margin: 0,
+                    fontSize: "11px",
+                    color: "#666"
+                  }}>
+                    {role.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
 
-        {/* ⬇️ NOUVEAU : Sélection du rôle */}
-        <select
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          style={{ 
-            width: "100%", 
-            padding: "10px", 
-            marginBottom: "10px",
-            border: "1px solid #ccc",
-            borderRadius: "4px",
-            backgroundColor: "white"
-          }}
-        >
-          <option value="demandeur">🏠 Client (cherche un service)</option>
-          <option value="demandeur">🔍 Demandeur d'emploi</option>
-          <option value="prestataire">🔧 Prestataire de services</option>
-          <option value="recruteur">💼 Recruteur / Employeur</option>
-        </select>
+          {/* Email */}
+          <div style={{ marginBottom: "15px" }}>
+            <label style={{
+              display: "block",
+              marginBottom: "8px",
+              color: "#333",
+              fontWeight: "500",
+              fontSize: "14px"
+            }}>
+              Email
+            </label>
+            <input
+              type="email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              placeholder="votreemail@example.com"
+              required
+              style={{
+                width: "100%",
+                padding: "12px",
+                border: "1px solid #ddd",
+                borderRadius: "4px",
+                fontSize: "14px",
+                boxSizing: "border-box"
+              }}
+              onFocus={(e) => e.target.style.borderColor = "#671E30"}
+              onBlur={(e) => e.target.style.borderColor = "#ddd"}
+            />
+          </div>
 
-        {/* Bouton submit */}
-        <button 
-          type="submit" 
-          disabled={loading}
-          style={{ 
-            width: "100%", 
-            padding: "10px", 
-            background: "#671E30",
-            color: "white",
-            border: "none",
-            borderRadius: "4px",
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.6 : 1,
-            fontWeight: "bold"
-          }}
-        >
-          {loading ? "Inscription..." : "S'inscrire"}
-        </button>
+          {/* Mot de passe */}
+          <div style={{ marginBottom: "15px" }}>
+            <label style={{
+              display: "block",
+              marginBottom: "8px",
+              color: "#333",
+              fontWeight: "500",
+              fontSize: "14px"
+            }}>
+              Mot de passe
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Minimum 8 caractères"
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  paddingRight: "50px",
+                  border: "1px solid #ddd",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box"
+                }}
+                onFocus={(e) => e.target.style.borderColor = "#671E30"}
+                onBlur={(e) => e.target.style.borderColor = "#ddd"}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute",
+                  right: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "18px",
+                  color: "#666",
+                  padding: "0",
+                  lineHeight: "1"
+                }}
+                title={showPassword ? "Cacher le mot de passe" : "Voir le mot de passe"}
+              >
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+            <p style={{ margin: "5px 0 0 0", fontSize: "11px", color: "#999" }}>
+              Doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre
+            </p>
+          </div>
 
-        <p style={{ marginTop: "10px", textAlign: "center", fontSize: "14px" }}>
-          Déjà un compte ?{" "}
-          <a href="/login" style={{ color: "#671E30", textDecoration: "none", fontWeight: "bold" }}>
-            Se connecter
-          </a>
-        </p>
-      </form>
+          {/* Confirmer mot de passe */}
+          <div style={{ marginBottom: "25px" }}>
+            <label style={{
+              display: "block",
+              marginBottom: "8px",
+              color: "#333",
+              fontWeight: "500",
+              fontSize: "14px"
+            }}>
+              Confirmer le mot de passe
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                name="confirmPassword"
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                placeholder="Retapez votre mot de passe"
+                required
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  paddingRight: "50px",
+                  border: `1px solid ${
+                    formData.confirmPassword && formData.password !== formData.confirmPassword
+                      ? "#c33"
+                      : formData.confirmPassword && formData.password === formData.confirmPassword
+                      ? "#3c3"
+                      : "#ddd"
+                  }`,
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box"
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{
+                  position: "absolute",
+                  right: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "18px",
+                  color: "#666",
+                  padding: "0",
+                  lineHeight: "1"
+                }}
+                title={showConfirmPassword ? "Cacher le mot de passe" : "Voir le mot de passe"}
+              >
+                {showConfirmPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+            {formData.confirmPassword && formData.password !== formData.confirmPassword && (
+              <p style={{ margin: "5px 0 0 0", fontSize: "12px", color: "#c33" }}>
+                ❌ Les mots de passe ne correspondent pas
+              </p>
+            )}
+            {formData.confirmPassword && formData.password === formData.confirmPassword && (
+              <p style={{ margin: "5px 0 0 0", fontSize: "12px", color: "#3c3" }}>
+                ✅ Les mots de passe correspondent
+              </p>
+            )}
+          </div>
+
+          {/* Bouton inscription */}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: loading ? "#ccc" : "#671E30",
+              color: "white",
+              border: "none",
+              borderRadius: "4px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: loading ? "not-allowed" : "pointer",
+              marginBottom: "15px",
+              transition: "background 0.2s"
+            }}
+            onMouseEnter={(e) => { if (!loading) e.target.style.background = "#8B2940" }}
+            onMouseLeave={(e) => { if (!loading) e.target.style.background = "#671E30" }}
+          >
+            {loading ? "⏳ Création du compte..." : "Créer mon compte"}
+          </button>
+        </form>
+
+        {/* Lien connexion */}
+        <div style={{ textAlign: "center" }}>
+          <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>
+            Déjà un compte ?{" "}
+            <button
+              onClick={() => navigate("/login")}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#671E30",
+                cursor: "pointer",
+                fontWeight: "bold",
+                fontSize: "14px",
+                textDecoration: "underline",
+                padding: "0"
+              }}
+            >
+              Se connecter
+            </button>
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
