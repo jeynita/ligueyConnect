@@ -1,45 +1,61 @@
-# Dependencies
+# # Dependencies
+# node_modules/
+# npm-debug.log*
+# yarn-debug.log*
+# yarn-error.log*
+
+# # Environment variables
+# .env
+# .env.local
+# .env.production
+
+# # Build outputs
+# frontend/dist/
+# frontend/build/
+# backend/dist/
+# backend/build/
+
+# # IDE
+# .vscode/
+# .idea/
+# *.swp
+# *.swo
+# *~
+
+# # OS
+# .DS_Store
+# Thumbs.db
+
+# # Logs
+# *.log
+# logs/
+
+# # Database
+# *.sqlite
+# *.db
+
+# # Test
+# coverage/
+# .nyc_output/
+
+# # Temp
+# tmp/
+# temp/
+# "list-files.js" 
+# "backend/test-complet.js" 
+
+# Dépendances (trop lourdes, seront réinstallées)
 node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Environment variables
-.env
+# Variables d'environnement (SECRETS à ne JAMAIS partager)
+.env                  # ← Votre fichier .env avec DB_PASSWORD, JWT_SECRET
 .env.local
-.env.production
 
-# Build outputs
-frontend/dist/
-frontend/build/
-backend/dist/
-backend/build/
+# Fichiers de build (générés automatiquement)
+dist/
+build/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
+# Logs et fichiers temporaires
 *.log
-logs/
-
-# Database
-*.sqlite
-*.db
-
-# Test
-coverage/
-.nyc_output/
-
-# Temp
-tmp/
-temp/
-"list-files.js" 
-"backend/test-complet.js" 
+.DS_Store            # ← Fichiers macOS
+Thumbs.db            # ← Fichiers Windows

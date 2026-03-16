@@ -163,7 +163,8 @@ const startServer = async () => {
       await sequelize.sync({ alter: true });
       console.log("✅ Tables synchronisées (mode development)");
     } else {
-      await sequelize.sync();
+      // ✅ CORRECTION 5 : En production, ne PAS modifier la structure automatiquement
+      await sequelize.sync({ alter: false });
       console.log("✅ Tables synchronisées (mode production)");
     }
 
@@ -175,9 +176,10 @@ const startServer = async () => {
     const availableRoles = roles.map(r => r.role);
     console.log("📋 Rôles détectés:", availableRoles.length > 0 ? availableRoles.join(', ') : 'Aucun utilisateur');
 
-    // ✅ process.env.PORT en premier — Render l'injecte automatiquement
+    // ✅ process.env.PORT en premier — Railway/Render l'injectent automatiquement
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, () => {
+    // ✅ CORRECTION 6 : Écouter sur 0.0.0.0 (OBLIGATOIRE pour Railway/Render)
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║                                                            ║
