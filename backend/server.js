@@ -168,15 +168,15 @@ const startServer = async () => {
     //   console.log("✅ Tables synchronisées (mode production)");
     // }
 // ✅ METTEZ ÇA À LA PLACE
-// if (process.env.NODE_ENV !== "production") {
-//   await sequelize.sync({ alter: true });
-//   console.log("✅ Tables synchronisées (mode development)");
-// } else {
-//   console.log("⚠️  Production : tables créées via SQL");
-// }
+if (process.env.NODE_ENV !== "production") {
+  await sequelize.sync({ alter: true });
+  console.log("✅ Tables synchronisées (mode development)");
+} else {
+  console.log("⚠️  Production : tables créées via SQL");
+}
 // On force la synchronisation pour créer les tables sur Aiven (première fois)
-await sequelize.sync({ alter: true });
-console.log(`✅ Tables synchronisées en mode ${process.env.NODE_ENV || 'development'}`);
+// await sequelize.sync({ alter: true });
+// console.log(`✅ Tables synchronisées en mode ${process.env.NODE_ENV || 'development'}`);
     const roles = await Users.findAll({
       attributes: [[sequelize.fn('DISTINCT', sequelize.col('role')), 'role']],
       raw: true
