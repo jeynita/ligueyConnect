@@ -6,23 +6,23 @@ dotenv.config();
 /**
  * Configuration Sequelize pour Development et Production
  * 
- * Production (Railway) : Utilise MYSQL_URL fourni automatiquement
+ * Production (Render) : Utilise DATABASE_URL fourni automatiquement
  * Development (Local) : Utilise les variables .env individuelles
  */
 
 let sequelize;
 
-// ✅ PRODUCTION (Railway) : Railway fournit automatiquement MYSQL_URL
-if (process.env.NODE_ENV === "production" && process.env.MYSQL_URL) {
-  console.log("🚂 Connexion MySQL via Railway (MYSQL_URL)...");
+// ✅ PRODUCTION (Render) : Render fournit automatiquement DATABASE_URL
+if (process.env.NODE_ENV === "production" && process.env.DATABASE_URL) {
+  console.log("🎨 Connexion MySQL via Render (DATABASE_URL)...");
   
-  sequelize = new Sequelize(process.env.MYSQL_URL, {
+  sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: "mysql",
     
     // Logging désactivé en production
     logging: false,
     
-    // Pool de connexions optimisé pour Railway
+    // Pool de connexions optimisé pour Render
     pool: {
       max: 5,
       min: 0,
@@ -38,14 +38,6 @@ if (process.env.NODE_ENV === "production" && process.env.MYSQL_URL) {
       timestamps: true,
       underscored: true,
       freezeTableName: true
-    },
-    
-    // Options SSL si nécessaire (Railway peut en avoir besoin)
-    dialectOptions: {
-      ssl: process.env.MYSQL_SSL === "true" ? {
-        require: true,
-        rejectUnauthorized: false
-      } : false
     }
   });
 
