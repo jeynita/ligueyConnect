@@ -159,15 +159,21 @@ const startServer = async () => {
     await sequelize.authenticate();
     console.log("✅ Connexion à la base de données réussie");
 
-    if (process.env.NODE_ENV === "development") {
-      await sequelize.sync({ alter: true });
-      console.log("✅ Tables synchronisées (mode development)");
-    } else {
-      // ✅ CORRECTION 5 : En production, ne PAS modifier la structure automatiquement
-      await sequelize.sync({ alter: false });
-      console.log("✅ Tables synchronisées (mode production)");
-    }
-
+    // if (process.env.NODE_ENV === "development") {
+    //   await sequelize.sync({ alter: true });
+    //   console.log("✅ Tables synchronisées (mode development)");
+    // } else {
+    //   // ✅ CORRECTION 5 : En production, ne PAS modifier la structure automatiquement
+    //   await sequelize.sync({ alter: false });
+    //   console.log("✅ Tables synchronisées (mode production)");
+    // }
+// ✅ METTEZ ÇA À LA PLACE
+if (process.env.NODE_ENV !== "production") {
+  await sequelize.sync({ alter: true });
+  console.log("✅ Tables synchronisées (mode development)");
+} else {
+  console.log("⚠️  Production : tables créées via SQL");
+}
     const roles = await Users.findAll({
       attributes: [[sequelize.fn('DISTINCT', sequelize.col('role')), 'role']],
       raw: true
