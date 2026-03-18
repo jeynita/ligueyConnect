@@ -29,6 +29,7 @@ export const register = async (email, password, role) => {
     password,
     options: {
       data: { role },
+      emailRedirectTo: `${window.location.origin}/login`,
     },
   });
   if (error) throw new Error(error.message);
