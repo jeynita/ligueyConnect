@@ -1,14 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
-
-// ✅ Sécurité : extrait le tableau de données quelle que soit la structure renvoyée
-const extractData = (responseData) => {
-  if (!responseData) return [];
-  if (Array.isArray(responseData)) return responseData;
-  if (Array.isArray(responseData.data)) return responseData.data;
-  return [];
-};
+import { supabase } from "../lib/supabase";
+import { Building2, Eye, FileText, MapPinned, Pencil, Tag, Trash2, Users, Calendar, Plus, Briefcase, Coins } from "lucide-react";
+import { Icon } from "../components/Icon";
 
 const CONTRACT_LABELS = {
   CDI:        { label: "CDI",        bg: "#E8F5E9", color: "#2E7D32" },
@@ -21,6 +15,9 @@ const CONTRACT_LABELS = {
 const STATUS_STYLES = {
   active:   { bg: "#EDFAED", color: "#2E7D32", text: "✅ Active"   },
   inactive: { bg: "#FDECEA", color: "#C62828", text: "❌ Inactive" },
+  expiree:  { bg: "#FFF8E1", color: "#9E7C00", text: "⏰ Expirée"  },
+  pourvue:  { bg: "#E3F2FD", color: "#1565C0", text: "✔️ Pourvue"  },
+  // Compatibilité (anciens statuts)
   expired:  { bg: "#FFF8E1", color: "#9E7C00", text: "⏰ Expirée"  },
   filled:   { bg: "#E3F2FD", color: "#1565C0", text: "✔️ Pourvue"  },
 };
@@ -36,15 +33,12 @@ export default function OffreList() {
   // ── Vérification auth ────────────────────────────────────────────────────
   useEffect(() => {
     const userData = localStorage.getItem("user");
-    const token    = localStorage.getItem("token");
-
-    if (!userData || !token) { navigate("/login"); return; }
+    if (!userData) { navigate("/login"); return; }
 
     let parsedUser;
     try { parsedUser = JSON.parse(userData); }
     catch {
       localStorage.removeItem("user");
-      localStorage.removeItem("token");
       navigate("/login");
       return;
     }
@@ -54,23 +48,27 @@ export default function OffreList() {
       return;
     }
 
-    loadOffres();
+    loadOffres(parsedUser);
   }, [navigate]);
 
   // ── Chargement ───────────────────────────────────────────────────────────
-  const loadOffres = async () => {
+  const loadOffres = async (user) => {
     try {
       setLoading(true);
       setError("");
-      const response = await api.get("/offres/me");
-      setOffres(extractData(response.data));
+
+      const userData = user || JSON.parse(localStorage.getItem("user"));
+
+      const { data, error: sbError } = await supabase
+        .from("offres")
+        .select("*")
+        .eq("user_id", userData.id)
+        .order("created_at", { ascending: false });
+
+      if (sbError) throw sbError;
+
+      setOffres(data || []);
     } catch (err) {
-      if (err.response?.status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        navigate("/login");
-        return;
-      }
       console.error("Erreur chargement offres:", err);
       setError("Impossible de charger vos offres. Veuillez réessayer.");
     } finally {
@@ -83,15 +81,15 @@ export default function OffreList() {
     if (!confirm(`Supprimer l'offre "${title}" ? Cette action est irréversible.`)) return;
 
     try {
-      await api.delete(`/offres/${id}`);
+      const { error: sbError } = await supabase
+        .from("offres")
+        .delete()
+        .eq("id", id);
+
+      if (sbError) throw sbError;
+
       setOffres(prev => prev.filter(o => o.id !== id));
     } catch (err) {
-      if (err.response?.status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        navigate("/login");
-        return;
-      }
       alert("Erreur lors de la suppression. Veuillez réessayer.");
       console.error("Erreur suppression offre:", err);
     }
@@ -191,7 +189,9 @@ export default function OffreList() {
         {offres.length === 0 ? (
           <div style={{ background: "white", padding: "50px 40px", borderRadius: "8px",
             textAlign: "center", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
-            <p style={{ fontSize: "52px", margin: "0 0 16px 0" }}>📋</p>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "14px" }}>
+              <Icon as={FileText} size={48} color="#671E30" />
+            </div>
             <h3 style={{ margin: "0 0 10px 0", color: "#671E30" }}>Aucune offre publiée</h3>
             <p style={{ margin: "0 0 24px 0", color: "#666" }}>
               Publiez votre première offre pour trouver les meilleurs candidats.
@@ -202,7 +202,10 @@ export default function OffreList() {
                 border: "none", borderRadius: "4px", cursor: "pointer",
                 fontWeight: "bold", fontSize: "15px" }}
             >
-              ➕ Publier une offre
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <Icon as={Plus} size={18} color="white" />
+                Publier une offre
+              </span>
             </button>
           </div>
         ) : (
@@ -217,8 +220,8 @@ export default function OffreList() {
                 <div style={{
                   height: "4px",
                   background: offre.status === "active" ? "#2E7D32"
-                    : offre.status === "filled"  ? "#1565C0"
-                    : offre.status === "expired" ? "#9E7C00"
+                    : (offre.status === "pourvue" || offre.status === "filled")  ? "#1565C0"
+                    : (offre.status === "expiree" || offre.status === "expired") ? "#9E7C00"
                     : "#C62828",
                 }} />
 
@@ -233,18 +236,31 @@ export default function OffreList() {
                         <h3 style={{ margin: 0, color: "#671E30", fontSize: "18px" }}>
                           {offre.title}
                         </h3>
-                        {getContractBadge(offre.contractType || offre.contract_type)}
+                        {getContractBadge(offre.contract_type)}
                         {getStatusBadge(offre.status)}
                       </div>
 
                       {/* Infos secondaires */}
                       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "13px", color: "#666" }}>
-                        <span>📍 {offre.city}{offre.region ? `, ${offre.region}` : ""}</span>
-                        {offre.companyName || offre.company_name
-                          ? <span>🏢 {offre.companyName || offre.company_name}</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <Icon as={MapPinned} size={14} color="#666" />
+                          {offre.city}{offre.region ? `, ${offre.region}` : ""}
+                        </span>
+                        {offre.company_name
+                          ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                              <Icon as={Building2} size={14} color="#666" />
+                              {offre.company_name}
+                            </span>
+                          )
                           : null}
                         {offre.sector
-                          ? <span>🏷️ {offre.sector}</span>
+                          ? (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                              <Icon as={Tag} size={14} color="#666" />
+                              {offre.sector}
+                            </span>
+                          )
                           : null}
                       </div>
                     </div>
@@ -257,13 +273,16 @@ export default function OffreList() {
                           border: "none", borderRadius: "4px", cursor: "pointer",
                           fontWeight: "bold", fontSize: "13px" }}
                       >
-                        👥 Candidatures
-                        {(offre.applicationCount ?? offre.application_count ?? 0) > 0 && (
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                          <Icon as={Users} size={16} color="white" />
+                          Candidatures
+                        </span>
+                        {(offre.application_count ?? 0) > 0 && (
                           <span style={{
                             marginLeft: "6px", background: "#CFA65B", color: "#1A1A1A",
                             borderRadius: "10px", padding: "1px 7px", fontSize: "11px",
                           }}>
-                            {offre.applicationCount ?? offre.application_count}
+                            {offre.application_count}
                           </span>
                         )}
                       </button>
@@ -273,7 +292,10 @@ export default function OffreList() {
                           border: "none", borderRadius: "4px", cursor: "pointer",
                           fontWeight: "bold", fontSize: "13px" }}
                       >
-                        ✏️ Modifier
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                          <Icon as={Pencil} size={16} color="white" />
+                          Modifier
+                        </span>
                       </button>
                       <button
                         onClick={() => handleDelete(offre.id, offre.title)}
@@ -281,7 +303,10 @@ export default function OffreList() {
                           border: "none", borderRadius: "4px", cursor: "pointer",
                           fontWeight: "bold", fontSize: "13px" }}
                       >
-                        🗑️ Supprimer
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                          <Icon as={Trash2} size={16} color="white" />
+                          Supprimer
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -305,52 +330,64 @@ export default function OffreList() {
                   }}>
                     <div>
                       <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
-                        👥 Candidatures
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <Icon as={Users} size={14} color="#888" />
+                          Candidatures
+                        </span>
                       </p>
                       <p style={{ margin: 0, fontSize: "15px", fontWeight: "700",
-                        color: (offre.applicationCount ?? offre.application_count ?? 0) > 0 ? "#2E7D32" : "#666" }}>
-                        {offre.applicationCount ?? offre.application_count ?? 0}
+                        color: (offre.application_count ?? 0) > 0 ? "#2E7D32" : "#666" }}>
+                        {offre.application_count ?? 0}
                       </p>
                     </div>
 
                     <div>
                       <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
-                        👁️ Vues
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <Icon as={Eye} size={14} color="#888" />
+                          Vues
+                        </span>
                       </p>
                       <p style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "#333" }}>
-                        {offre.viewCount ?? offre.view_count ?? 0}
+                        {offre.view_count ?? 0}
                       </p>
                     </div>
 
                     <div>
                       <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
-                        📅 Publiée le
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                          <Icon as={Calendar} size={14} color="#888" />
+                          Publiée le
+                        </span>
                       </p>
                       <p style={{ margin: 0, fontSize: "13px", color: "#333" }}>
-                        {formatDate(offre.createdAt || offre.created_at) || "—"}
+                        {formatDate(offre.created_at) || "—"}
                       </p>
                     </div>
 
-                    {(offre.applicationDeadline || offre.application_deadline) && (
+                    {offre.application_deadline && (
                       <div>
                         <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
                           ⏳ Clôture
                         </p>
                         <p style={{ margin: 0, fontSize: "13px", color: "#C62828", fontWeight: "600" }}>
-                          {formatDate(offre.applicationDeadline || offre.application_deadline)}
+                          {formatDate(offre.application_deadline)}
                         </p>
                       </div>
                     )}
 
-                    {(offre.salaryMin || offre.salary_min) && (
+                    {offre.salary_min && (
                       <div>
                         <p style={{ margin: "0 0 3px 0", fontSize: "11px", color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
-                          💰 Salaire
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                            <Icon as={Coins} size={14} color="#888" />
+                            Salaire
+                          </span>
                         </p>
                         <p style={{ margin: 0, fontSize: "13px", color: "#333" }}>
-                          {(offre.salaryMin ?? offre.salary_min ?? 0).toLocaleString("fr-FR")}
-                          {(offre.salaryMax || offre.salary_max)
-                            ? ` – ${(offre.salaryMax ?? offre.salary_max).toLocaleString("fr-FR")}`
+                          {(offre.salary_min ?? 0).toLocaleString("fr-FR")}
+                          {offre.salary_max
+                            ? ` – ${offre.salary_max.toLocaleString("fr-FR")}`
                             : ""}
                           {" "}FCFA
                         </p>

@@ -1,97 +1,77 @@
-import axios from "axios";
-
-// ✅ Dev  → .env.local : VITE_API_URL=http://localhost:5000/api
-// ✅ Prod → Vercel env : VITE_API_URL=https://xxx.onrender.com/api
-// ⚠️  Ton server.js utilise /api (sans /v1) — on aligne ici
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
-
-const api = axios.create({
-  baseURL: API_URL,
-  headers: { "Content-Type": "application/json" },
-  withCredentials: false, // false avec JWT Bearer, true seulement avec cookies
-});
-
-// ── Intercepteur de requête ───────────────────────────────────────────────────
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem("token");
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-
-    // Logs uniquement en développement
-    if (import.meta.env.DEV) {
-      console.log("📡 Appel API vers :", config.url);
-      console.log("🔑 TOKEN :", token ? "présent" : "ABSENT");
-    }
-
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// ── Intercepteur de réponse ───────────────────────────────────────────────────
-api.interceptors.response.use(
-  (response) => response,
-
-  (error) => {
-    const status = error.response?.status;
-
-    if (import.meta.env.DEV) {
-      console.error(`🚨 Erreur API ${status ?? "réseau"} :`, {
-        url:     error.config?.url,
-        message: error.response?.data?.message,
-        data:    error.response?.data,
-      });
-    }
-
-    // ✅ À réactiver après stabilisation complète :
-    // if (status === 401) {
-    //   localStorage.removeItem("token");
-    //   localStorage.removeItem("user");
-    //   window.location.href = "/login";
-    // }
-
-    return Promise.reject(error);
-  }
-);
-
-// ── Helpers extraction token ──────────────────────────────────────────────────
-
-const extractAuthPayload = (responseData) => {
-  if (responseData?.data?.token) return { token: responseData.data.token, user: responseData.data.user ?? null };
-  if (responseData?.token)       return { token: responseData.token,      user: responseData.user      ?? null };
-  if (responseData?.data?.data?.token) return { token: responseData.data.data.token, user: responseData.data.data.user ?? null };
-  console.warn("⚠️ Structure auth inattendue :", responseData);
-  return null;
-};
-
-const saveAuthToStorage = ({ token, user }) => {
-  localStorage.setItem("token", token);
-  if (user) localStorage.setItem("user", JSON.stringify(user));
-};
+import { supabase } from "../lib/supabase";
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 export const login = async (email, password) => {
-  const response = await api.post("/auth/login", { email, password });
-  if (import.meta.env.DEV) console.log("🔍 [login] response.data :", response.data);
-  const payload = extractAuthPayload(response.data);
-  if (!payload) throw new Error("Token introuvable dans la réponse du serveur.");
-  saveAuthToStorage(payload);
-  return payload;
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(error.message);
+
+  // Charger le profil pour avoir le rôle
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", data.user.id)
+    .single();
+
+  const user = {
+    id: data.user.id,
+    email: data.user.email,
+    role: profile?.role || "client",
+  };
+
+  localStorage.setItem("user", JSON.stringify(user));
+  return { user, session: data.session };
 };
 
 export const register = async (email, password, role) => {
-  const response = await api.post("/auth/register", { email, password, role });
-  if (import.meta.env.DEV) console.log("🔍 [register] response.data :", response.data);
-  const payload = extractAuthPayload(response.data);
-  if (!payload) throw new Error("Token introuvable dans la réponse du serveur.");
-  saveAuthToStorage(payload);
-  return payload;
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { role },
+    },
+  });
+  if (error) throw new Error(error.message);
+
+  const user = {
+    id: data.user.id,
+    email: data.user.email,
+    role: role || "client",
+  };
+
+  localStorage.setItem("user", JSON.stringify(user));
+  return { user, session: data.session };
 };
 
-export const logout = () => {
-  localStorage.removeItem("token");
+export const logout = async () => {
+  await supabase.auth.signOut();
   localStorage.removeItem("user");
 };
 
-export default api;
+export const forgotPassword = async (email) => {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  if (error) throw new Error(error.message);
+};
+
+export const resetPassword = async (newPassword) => {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+export const getCurrentUser = async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user;
+};
+
+export const getCurrentSession = async () => {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session;
+};
+
+// ── Export par défaut (compatibilité) ─────────────────────────────────────────
+// On n'utilise plus axios, on exporte supabase directement
+export default supabase;

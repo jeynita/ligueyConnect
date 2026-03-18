@@ -1,11 +1,9 @@
-import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import api from "../services/api";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { resetPassword } from "../services/api";
 
 export default function ResetPassword() {
   const [formData, setFormData] = useState({
-    email: "",
-    code: "",
     newPassword: "",
     confirmPassword: ""
   });
@@ -15,13 +13,6 @@ export default function ResetPassword() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    if (location.state?.email) {
-      setFormData(prev => ({ ...prev, email: location.state.email }));
-    }
-  }, [location]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -38,24 +29,18 @@ export default function ResetPassword() {
     }
 
     if (formData.newPassword.length < 8) {
-      setError("Le mot de passe doit contenir au moins 8 caractères");
+      setError("Le mot de passe doit contenir au moins 8 caracteres");
       return;
     }
 
     setLoading(true);
 
     try {
-      await api.post("/auth/reset-password", {
-        email: formData.email,
-        code: formData.code,
-        newPassword: formData.newPassword
-      });
-
+      await resetPassword(formData.newPassword);
       setSuccess(true);
       setTimeout(() => navigate("/login"), 3000);
-
     } catch (err) {
-      setError(err.response?.data?.message || "Erreur lors de la réinitialisation");
+      setError(err.message || "Erreur lors de la reinitialisation");
     } finally {
       setLoading(false);
     }
@@ -80,22 +65,16 @@ export default function ResetPassword() {
           maxWidth: "450px",
           width: "100%"
         }}>
-          <div style={{ fontSize: "64px", marginBottom: "20px" }}>✅</div>
+          <div style={{ fontSize: "64px", marginBottom: "20px" }}>OK</div>
           <h2 style={{ margin: "0 0 10px 0", color: "#671E30" }}>
-            Mot de passe réinitialisé !
+            Mot de passe reinitialise !
           </h2>
           <p style={{ margin: "0 0 20px 0", color: "#666" }}>
-            Votre mot de passe a été modifié avec succès.
+            Votre mot de passe a ete modifie avec succes.
           </p>
-          <div style={{
-            background: "#F0F0E8",
-            padding: "10px",
-            borderRadius: "4px"
-          }}>
-            <p style={{ margin: 0, color: "#999", fontSize: "14px" }}>
-              ⏳ Redirection vers la connexion dans 3 secondes...
-            </p>
-          </div>
+          <p style={{ margin: 0, color: "#999", fontSize: "14px" }}>
+            Redirection vers la connexion dans 3 secondes...
+          </p>
           <button
             onClick={() => navigate("/login")}
             style={{
@@ -135,7 +114,6 @@ export default function ResetPassword() {
         maxWidth: "450px"
       }}>
 
-        {/* Titre */}
         <div style={{ textAlign: "center", marginBottom: "30px" }}>
           <h1 style={{
             margin: "0 0 5px 0",
@@ -143,18 +121,17 @@ export default function ResetPassword() {
             fontSize: "28px",
             fontWeight: "bold"
           }}>
-            🔐 Nouveau mot de passe
+            Nouveau mot de passe
           </h1>
           <p style={{
             margin: 0,
             color: "#666",
             fontSize: "14px"
           }}>
-            Entrez le code reçu et votre nouveau mot de passe
+            Choisissez votre nouveau mot de passe
           </p>
         </div>
 
-        {/* Message d'erreur */}
         {error && (
           <div style={{
             background: "#fee",
@@ -166,84 +143,12 @@ export default function ResetPassword() {
             fontSize: "14px",
             textAlign: "center"
           }}>
-            ❌ {error}
+            {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
 
-          {/* Email */}
-          <div style={{ marginBottom: "15px" }}>
-            <label style={{
-              display: "block",
-              marginBottom: "8px",
-              color: "#333",
-              fontWeight: "500",
-              fontSize: "14px"
-            }}>
-              Email
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              placeholder="votreemail@example.com"
-              required
-              style={{
-                width: "100%",
-                padding: "12px",
-                border: "1px solid #ddd",
-                borderRadius: "4px",
-                fontSize: "14px",
-                boxSizing: "border-box"
-              }}
-              onFocus={(e) => e.target.style.borderColor = "#671E30"}
-              onBlur={(e) => e.target.style.borderColor = "#ddd"}
-            />
-          </div>
-
-          {/* Code de réinitialisation */}
-          <div style={{ marginBottom: "15px" }}>
-            <label style={{
-              display: "block",
-              marginBottom: "8px",
-              color: "#333",
-              fontWeight: "500",
-              fontSize: "14px"
-            }}>
-              Code de réinitialisation (6 chiffres)
-            </label>
-            <input
-              type="text"
-              name="code"
-              value={formData.code}
-              onChange={handleChange}
-              placeholder="Ex: 123456"
-              required
-              maxLength="6"
-              pattern="[0-9]{6}"
-              style={{
-                width: "100%",
-                padding: "14px",
-                border: "2px solid #ddd",
-                borderRadius: "4px",
-                fontSize: "24px",
-                letterSpacing: "8px",
-                textAlign: "center",
-                fontWeight: "bold",
-                boxSizing: "border-box",
-                color: "#671E30"
-              }}
-              onFocus={(e) => e.target.style.borderColor = "#671E30"}
-              onBlur={(e) => e.target.style.borderColor = "#ddd"}
-            />
-            <p style={{ margin: "5px 0 0 0", fontSize: "12px", color: "#999", textAlign: "center" }}>
-              Code valable pendant 1 heure
-            </p>
-          </div>
-
-          {/* Nouveau mot de passe */}
           <div style={{ marginBottom: "15px" }}>
             <label style={{
               display: "block",
@@ -260,7 +165,7 @@ export default function ResetPassword() {
                 name="newPassword"
                 value={formData.newPassword}
                 onChange={handleChange}
-                placeholder="Minimum 8 caractères"
+                placeholder="Minimum 8 caracteres"
                 required
                 style={{
                   width: "100%",
@@ -271,8 +176,6 @@ export default function ResetPassword() {
                   fontSize: "14px",
                   boxSizing: "border-box"
                 }}
-                onFocus={(e) => e.target.style.borderColor = "#671E30"}
-                onBlur={(e) => e.target.style.borderColor = "#ddd"}
               />
               <button
                 type="button"
@@ -290,17 +193,12 @@ export default function ResetPassword() {
                   padding: "0",
                   lineHeight: "1"
                 }}
-                title={showNewPassword ? "Cacher le mot de passe" : "Voir le mot de passe"}
               >
-                {showNewPassword ? "🙈" : "👁️"}
+                {showNewPassword ? "x" : "o"}
               </button>
             </div>
-            <p style={{ margin: "5px 0 0 0", fontSize: "11px", color: "#999" }}>
-              Doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre
-            </p>
           </div>
 
-          {/* Confirmer mot de passe */}
           <div style={{ marginBottom: "25px" }}>
             <label style={{
               display: "block",
@@ -351,24 +249,12 @@ export default function ResetPassword() {
                   padding: "0",
                   lineHeight: "1"
                 }}
-                title={showConfirmPassword ? "Cacher le mot de passe" : "Voir le mot de passe"}
               >
-                {showConfirmPassword ? "🙈" : "👁️"}
+                {showConfirmPassword ? "x" : "o"}
               </button>
             </div>
-            {formData.confirmPassword && formData.newPassword !== formData.confirmPassword && (
-              <p style={{ margin: "5px 0 0 0", fontSize: "12px", color: "#c33" }}>
-                ❌ Les mots de passe ne correspondent pas
-              </p>
-            )}
-            {formData.confirmPassword && formData.newPassword === formData.confirmPassword && (
-              <p style={{ margin: "5px 0 0 0", fontSize: "12px", color: "#3c3" }}>
-                ✅ Les mots de passe correspondent
-              </p>
-            )}
           </div>
 
-          {/* Bouton réinitialiser */}
           <button
             type="submit"
             disabled={loading}
@@ -382,32 +268,14 @@ export default function ResetPassword() {
               fontSize: "16px",
               fontWeight: "bold",
               cursor: loading ? "not-allowed" : "pointer",
-              transition: "background 0.2s",
               marginBottom: "15px"
             }}
-            onMouseEnter={(e) => { if (!loading) e.target.style.background = "#8B2940" }}
-            onMouseLeave={(e) => { if (!loading) e.target.style.background = "#671E30" }}
           >
-            {loading ? "⏳ Réinitialisation..." : "🔐 Réinitialiser le mot de passe"}
+            {loading ? "Reinitialisation..." : "Reinitialiser le mot de passe"}
           </button>
         </form>
 
-        {/* Liens */}
-        <div style={{ textAlign: "center", display: "flex", gap: "20px", justifyContent: "center" }}>
-          <button
-            onClick={() => navigate("/forgot-password")}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#CFA65B",
-              cursor: "pointer",
-              fontSize: "13px",
-              textDecoration: "underline",
-              padding: "0"
-            }}
-          >
-            ← Nouveau code
-          </button>
+        <div style={{ textAlign: "center" }}>
           <button
             onClick={() => navigate("/login")}
             style={{
@@ -420,7 +288,7 @@ export default function ResetPassword() {
               padding: "0"
             }}
           >
-            Retour à la connexion
+            Retour a la connexion
           </button>
         </div>
       </div>

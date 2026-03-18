@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { logout } from "../services/api";
-import api from "../services/api";
+import { supabase } from "../lib/supabase";
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
-  const [stats, setStats] = useState({ serviceCount: null }); // null = chargement en cours
+  const [stats, setStats] = useState({ serviceCount: null });
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -14,20 +14,21 @@ export default function Dashboard() {
       const parsedUser = JSON.parse(userData);
       setUser(parsedUser);
 
-      // ✅ Chargement des stats selon le rôle
       if (parsedUser.role === "prestataire") {
-        loadServiceStats();
+        loadServiceStats(parsedUser.id);
       }
     } else {
       navigate("/login");
     }
   }, [navigate]);
 
-  const loadServiceStats = async () => {
+  const loadServiceStats = async (userId) => {
     try {
-      const response = await api.get("/services/me");
-      const count = response.data?.count ?? response.data?.data?.length ?? 0;
-      setStats({ serviceCount: count });
+      const { count } = await supabase
+        .from("services")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", userId);
+      setStats({ serviceCount: count || 0 });
     } catch (err) {
       console.error("Erreur chargement stats services:", err);
       setStats({ serviceCount: 0 });
@@ -37,12 +38,12 @@ export default function Dashboard() {
   const getServiceCountLabel = () => {
     const { serviceCount } = stats;
     if (serviceCount === null) return "Chargement...";
-    if (serviceCount === 0) return "Aucun service publié";
+    if (serviceCount === 0) return "Aucun service publie";
     return `${serviceCount} service${serviceCount > 1 ? "s" : ""} en ligne`;
   };
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate("/login");
   };
 
@@ -56,20 +57,20 @@ export default function Dashboard() {
 
   const getRoleDisplay = (role) => {
     const roles = {
-      client: { emoji: "🏠", name: "Client particulier" },
-      demandeur: { emoji: "🔍", name: "Demandeur d'emploi" },
-      prestataire: { emoji: "🔧", name: "Prestataire de services" },
-      recruteur: { emoji: "💼", name: "Recruteur" },
-      admin: { emoji: "👑", name: "Administrateur" }
+      client: { emoji: "", name: "Client particulier" },
+      demandeur: { emoji: "", name: "Demandeur d'emploi" },
+      prestataire: { emoji: "", name: "Prestataire de services" },
+      recruteur: { emoji: "", name: "Recruteur" },
+      admin: { emoji: "", name: "Administrateur" }
     };
-    return roles[role] || { emoji: "👤", name: role };
+    return roles[role] || { emoji: "", name: role };
   };
 
   const roleDisplay = getRoleDisplay(user.role);
 
   return (
     <div style={{ minHeight: "100vh", background: "#F0F0E8", padding: "20px" }}>
-      {/* En-tête */}
+      {/* En-tete */}
       <div style={{
         background: "white",
         padding: "20px",
@@ -98,7 +99,7 @@ export default function Dashboard() {
               fontWeight: "bold"
             }}
           >
-            Se déconnecter
+            Se deconnecter
           </button>
         </div>
       </div>
@@ -113,7 +114,7 @@ export default function Dashboard() {
         boxShadow: "0 4px 6px rgba(0,0,0,0.1)"
       }}>
         <h2 style={{ margin: 0, fontSize: "28px" }}>
-          {roleDisplay.emoji} Bienvenue !
+          Bienvenue !
         </h2>
         <p style={{ margin: "10px 0 0 0", fontSize: "16px", opacity: 0.9 }}>
           {user.email}
@@ -130,7 +131,7 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Contenu selon le rôle */}
+      {/* Contenu selon le role */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
 
         {/* Carte : Mon profil */}
@@ -141,10 +142,10 @@ export default function Dashboard() {
           boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
         }}>
           <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-            👤 Mon profil
+            Mon profil
           </h3>
           <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
-            Complétez votre profil pour être plus visible
+            Completez votre profil pour etre plus visible
           </p>
           <button
             onClick={() => navigate("/profile/edit")}
@@ -159,7 +160,7 @@ export default function Dashboard() {
               fontWeight: "bold"
             }}
           >
-            Compléter mon profil
+            Completer mon profil
           </button>
         </div>
 
@@ -173,10 +174,10 @@ export default function Dashboard() {
               boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
             }}>
               <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                🔍 Trouver un prestataire
+                Trouver un prestataire
               </h3>
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
-                Recherchez des artisans et services de proximité
+                Recherchez des artisans et services de proximite
               </p>
               <button
                 onClick={() => navigate("/services/search")}
@@ -194,20 +195,6 @@ export default function Dashboard() {
                 Rechercher
               </button>
             </div>
-
-            <div style={{
-              background: "white",
-              padding: "20px",
-              borderRadius: "8px",
-              boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-            }}>
-              <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                💬 Mes demandes
-              </h3>
-              <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
-                Aucune demande en cours
-              </p>
-            </div>
           </>
         )}
 
@@ -221,7 +208,7 @@ export default function Dashboard() {
               boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
             }}>
               <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                📋 Offres d'emploi
+                Offres d'emploi
               </h3>
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
                 Consultez les offres CDD, CDI et missions
@@ -250,13 +237,13 @@ export default function Dashboard() {
               boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
             }}>
               <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                📨 Mes candidatures
+                Mes candidatures
               </h3>
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
-                Aucune candidature envoyée
+                Suivez vos candidatures envoyees
               </p>
               <button
-                onClick={() => navigate("/offres/candidatures")}
+                onClick={() => navigate("/candidatures")}
                 style={{
                   padding: "10px 15px",
                   background: "#CFA65B",
@@ -284,10 +271,10 @@ export default function Dashboard() {
               boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
             }}>
               <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                ➕ Publier un service
+                Publier un service
               </h3>
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
-                Ajoutez vos compétences et services proposés
+                Ajoutez vos competences et services proposes
               </p>
               <button
                 onClick={() => navigate("/services/create")}
@@ -313,23 +300,16 @@ export default function Dashboard() {
               boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
             }}>
               <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                📊 Mes services
+                Mes services
               </h3>
-
-              {/* ✅ Texte dynamique selon l'état du chargement et le count */}
               <p style={{
                 margin: "0 0 10px 0",
                 fontSize: "14px",
-                color: stats.serviceCount === null
-                  ? "#999"                          // chargement
-                  : stats.serviceCount > 0
-                    ? "#2E7D32"                     // services actifs → vert
-                    : "#666",                       // aucun service → gris
+                color: stats.serviceCount > 0 ? "#2E7D32" : "#666",
                 fontWeight: stats.serviceCount > 0 ? "600" : "normal",
               }}>
                 {getServiceCountLabel()}
               </p>
-
               <button
                 onClick={() => navigate("/services/me")}
                 style={{
@@ -359,10 +339,10 @@ export default function Dashboard() {
               boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
             }}>
               <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                ➕ Publier une offre
+                Publier une offre
               </h3>
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
-                Créez une offre d'emploi CDD, CDI ou mission
+                Creez une offre d'emploi CDD, CDI ou mission
               </p>
               <button
                 onClick={() => navigate("/offres/create")}
@@ -377,7 +357,7 @@ export default function Dashboard() {
                   fontWeight: "bold"
                 }}
               >
-                Créer une offre
+                Creer une offre
               </button>
             </div>
 
@@ -388,10 +368,10 @@ export default function Dashboard() {
               boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
             }}>
               <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                📋 Mes offres
+                Mes offres
               </h3>
               <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
-                Aucune offre publiée
+                Gerez vos offres publiees
               </p>
               <button
                 onClick={() => navigate("/offres/me")}
@@ -420,7 +400,7 @@ export default function Dashboard() {
           boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
         }}>
           <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-            💬 Messages
+            Messages
           </h3>
           <p style={{ margin: "0 0 10px 0", fontSize: "14px", color: "#666" }}>
             Communiquez avec les utilisateurs

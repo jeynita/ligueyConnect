@@ -3,7 +3,9 @@
 
 import React, { useState, useEffect, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { supabase } from "../lib/supabase";
+import { Building2, Camera, MapPinned, Save, User, Briefcase, Wrench, FileText } from "lucide-react";
+import { Icon } from "../components/Icon";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. CONSTANTS
@@ -231,19 +233,79 @@ function validateForm(data, role) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 4. FORMDATA BUILDER
+// 4. SNAKE_CASE <-> CAMELCASE MAPPING
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildFormData(data) {
-  const fd = new FormData();
-  Object.entries(data).forEach(([key, value]) => {
-    if (value === null || value === undefined) return;
-    if (key === "avatar" && value instanceof File) { fd.append("avatar", value, value.name); return; }
-    if (Array.isArray(value)) { const f = value.filter(Boolean); if (f.length) fd.append(key, f.join(",")); return; }
-    if (typeof value === "boolean") { fd.append(key, value ? "true" : "false"); return; }
-    if (String(value).trim()) fd.append(key, String(value).trim());
-  });
-  return fd;
+// Map from Supabase snake_case columns to camelCase form fields
+function mapProfileFromDb(p) {
+  return {
+    firstName: p.first_name || "",
+    lastName: p.last_name || "",
+    phone: p.phone || "",
+    bio: p.bio || "",
+    address: p.address || "",
+    city: p.city || "",
+    region: p.region || "",
+    profession: p.profession || "",
+    skills: parseSkills(p.skills),
+    experience: p.experience || "",
+    hourlyRate: p.hourly_rate || "",
+    availability: p.availability || "disponible",
+    transportMode: p.transport_mode || "",
+    workZones: p.work_zones || "",
+    contractType: p.contract_type || "",
+    expectedSalary: p.expected_salary || "",
+    availabilityDelay: p.availability_delay || "",
+    educationLevel: p.education_level || "",
+    references: p.references || "",
+    hasWorkPermit: p.has_work_permit || false,
+    companyName: p.company_name || "",
+    companySize: p.company_size || "",
+    companySector: p.company_sector || "",
+    companyNinea: p.company_ninea || "",
+    servicePreferences: p.service_preferences || "",
+    budgetRange: p.budget_range || "",
+    clientType: p.client_type || "",
+    avatarUrl: p.avatar_url || "",
+    profileCompleteness: p.profile_completeness || 0,
+    reviewCount: p.review_count || 0,
+  };
+}
+
+// Map from camelCase form fields to Supabase snake_case columns (excludes avatar file)
+function mapFormToDb(data) {
+  const fields = {};
+  if (data.firstName !== undefined) fields.first_name = data.firstName.trim();
+  if (data.lastName !== undefined) fields.last_name = data.lastName.trim();
+  if (data.phone !== undefined) fields.phone = data.phone.trim();
+  if (data.bio !== undefined) fields.bio = data.bio.trim();
+  if (data.address !== undefined) fields.address = data.address.trim();
+  if (data.city !== undefined) fields.city = data.city;
+  if (data.region !== undefined) fields.region = data.region;
+  if (data.profession !== undefined) fields.profession = data.profession.trim();
+  if (data.skills !== undefined) {
+    const arr = Array.isArray(data.skills) ? data.skills.filter(Boolean) : [];
+    fields.skills = arr.length ? arr.join(",") : "";
+  }
+  if (data.experience !== undefined) fields.experience = data.experience.trim();
+  if (data.hourlyRate !== undefined) fields.hourly_rate = data.hourlyRate;
+  if (data.availability !== undefined) fields.availability = data.availability;
+  if (data.transportMode !== undefined) fields.transport_mode = data.transportMode;
+  if (data.workZones !== undefined) fields.work_zones = data.workZones.trim();
+  if (data.contractType !== undefined) fields.contract_type = data.contractType;
+  if (data.expectedSalary !== undefined) fields.expected_salary = data.expectedSalary;
+  if (data.availabilityDelay !== undefined) fields.availability_delay = data.availabilityDelay;
+  if (data.educationLevel !== undefined) fields.education_level = data.educationLevel;
+  if (data.references !== undefined) fields.references = data.references.trim();
+  if (data.hasWorkPermit !== undefined) fields.has_work_permit = data.hasWorkPermit;
+  if (data.companyName !== undefined) fields.company_name = data.companyName.trim();
+  if (data.companySize !== undefined) fields.company_size = data.companySize;
+  if (data.companySector !== undefined) fields.company_sector = data.companySector;
+  if (data.companyNinea !== undefined) fields.company_ninea = data.companyNinea.trim();
+  if (data.servicePreferences !== undefined) fields.service_preferences = data.servicePreferences.trim();
+  if (data.budgetRange !== undefined) fields.budget_range = data.budgetRange;
+  if (data.clientType !== undefined) fields.client_type = data.clientType;
+  return fields;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -277,33 +339,53 @@ function useProfileForm() {
       try {
         const raw = localStorage.getItem("user");
         if (!raw) { navigate("/login"); return; }
-        setUser(JSON.parse(raw));
+        const parsedUser = JSON.parse(raw);
+        setUser(parsedUser);
 
-        const { data } = await api.get("/profiles/me");
-        const p = data.data;
-        setProfile(p);
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", parsedUser.id)
+          .single();
+
+        if (error) throw error;
+
+        const mapped = mapProfileFromDb(data);
+        setProfile({ ...data, profileCompleteness: mapped.profileCompleteness });
 
         setFormData({
           ...INITIAL_FORM,
-          firstName: p.firstName || "", lastName: p.lastName || "",
-          phone: p.phone || "", bio: p.bio || "",
-          address: p.address || "", city: p.city || "", region: p.region || "",
-          profession: p.profession || "", skills: parseSkills(p.skills),
-          experience: p.experience || "", hourlyRate: p.hourlyRate || "",
-          availability: p.availability || "disponible",
-          transportMode: p.transportMode || "", workZones: p.workZones || "",
-          contractType: p.contractType || "", expectedSalary: p.expectedSalary || "",
-          availabilityDelay: p.availabilityDelay || "",
-          educationLevel: p.educationLevel || "", references: p.references || "",
-          hasWorkPermit: p.hasWorkPermit || false,
-          companyName: p.companyName || "", companySize: p.companySize || "",
-          companySector: p.companySector || "", companyNinea: p.companyNinea || "",
-          servicePreferences: p.servicePreferences || "",
-          budgetRange: p.budgetRange || "", clientType: p.clientType || "",
+          firstName: mapped.firstName,
+          lastName: mapped.lastName,
+          phone: mapped.phone,
+          bio: mapped.bio,
+          address: mapped.address,
+          city: mapped.city,
+          region: mapped.region,
+          profession: mapped.profession,
+          skills: mapped.skills,
+          experience: mapped.experience,
+          hourlyRate: mapped.hourlyRate,
+          availability: mapped.availability,
+          transportMode: mapped.transportMode,
+          workZones: mapped.workZones,
+          contractType: mapped.contractType,
+          expectedSalary: mapped.expectedSalary,
+          availabilityDelay: mapped.availabilityDelay,
+          educationLevel: mapped.educationLevel,
+          references: mapped.references,
+          hasWorkPermit: mapped.hasWorkPermit,
+          companyName: mapped.companyName,
+          companySize: mapped.companySize,
+          companySector: mapped.companySector,
+          companyNinea: mapped.companyNinea,
+          servicePreferences: mapped.servicePreferences,
+          budgetRange: mapped.budgetRange,
+          clientType: mapped.clientType,
           avatar: null,
         });
 
-        if (p.avatarUrl) setAvatarPreview(p.avatarUrl);
+        if (mapped.avatarUrl) setAvatarPreview(mapped.avatarUrl);
       } catch (err) {
         console.error(err);
         setApiError("Impossible de charger le profil.");
@@ -349,16 +431,46 @@ function useProfileForm() {
 
     setSaving(true);
     try {
-      const fd = buildFormData(formData);
-      const { data } = await api.put("/profiles/me", fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // Build the snake_case fields object for Supabase
+      const dbFields = mapFormToDb(formData);
+
+      // Handle avatar upload if a new file was selected
+      if (formData.avatar instanceof File) {
+        const fileExt = formData.avatar.name.split(".").pop();
+        const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, formData.avatar, {
+            cacheControl: "3600",
+            upsert: true,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: urlData } = supabase.storage
+          .from("avatars")
+          .getPublicUrl(filePath);
+
+        dbFields.avatar_url = urlData.publicUrl;
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .update(dbFields)
+        .eq("id", user.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const updatedMapped = mapProfileFromDb(data);
       setSuccess("Profil mis à jour avec succès !");
-      setProfile(data.data);
+      setProfile({ ...data, profileCompleteness: updatedMapped.profileCompleteness });
       setTimeout(() => navigate("/dashboard"), 1600);
     } catch (err) {
       console.error(err);
-      setApiError(err.response?.data?.message || "Erreur lors de la mise à jour.");
+      setApiError(err.message || "Erreur lors de la mise à jour.");
     } finally {
       setSaving(false);
     }
@@ -429,16 +541,26 @@ function ProfileProgress({ pct }) {
 
 const PersonalInfoSection = memo(({ formData, onChange, onAvatarChange, avatarPreview, errors }) => (
   <div style={S.card}>
-    <h3 style={S.cardTitle}>👤 Informations personnelles</h3>
+    <h3 style={S.cardTitle}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+        <Icon as={User} size={18} color={t.primary} />
+        Informations personnelles
+      </span>
+    </h3>
 
     {/* Avatar */}
     <div style={S.avatarWrap}>
       {avatarPreview
         ? <img src={avatarPreview} alt="Avatar" style={S.avatarImg} />
-        : <div style={S.avatarPlaceholder}>🧑</div>
+        : <div style={S.avatarPlaceholder}><Icon as={User} size={34} color="white" /></div>
       }
       <div>
-        <label style={S.fileLabel} htmlFor="avatarInput">📷 Changer la photo</label>
+        <label style={S.fileLabel} htmlFor="avatarInput">
+          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+            <Icon as={Camera} size={16} color="white" />
+            Changer la photo
+          </span>
+        </label>
         <input id="avatarInput" type="file" accept="image/jpeg,image/png,image/webp"
           onChange={onAvatarChange} style={{ display: "none" }} />
         <p style={S.hint}>JPG, PNG ou WebP · max 5 Mo</p>
@@ -483,7 +605,12 @@ const PersonalInfoSection = memo(({ formData, onChange, onAvatarChange, avatarPr
 
 const LocationSection = memo(({ formData, onChange }) => (
   <div style={S.card}>
-    <h3 style={S.cardTitle}>📍 Localisation</h3>
+    <h3 style={S.cardTitle}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+        <Icon as={MapPinned} size={18} color={t.primary} />
+        Localisation
+      </span>
+    </h3>
 
     <div style={S.field}>
       <Label>Adresse</Label>
@@ -514,7 +641,12 @@ const LocationSection = memo(({ formData, onChange }) => (
 
 const ProfessionalInfoSection = memo(({ formData, onChange, onSkillsChange, errors }) => (
   <div style={S.card}>
-    <h3 style={S.cardTitle}>💼 Informations professionnelles</h3>
+    <h3 style={S.cardTitle}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+        <Icon as={Briefcase} size={18} color={t.primary} />
+        Informations professionnelles
+      </span>
+    </h3>
 
     <div style={S.field}>
       <Label required>Profession / Métier</Label>
@@ -545,7 +677,12 @@ const ProfessionalInfoSection = memo(({ formData, onChange, onSkillsChange, erro
 
 const PrestataireSection = memo(({ formData, onChange, errors }) => (
   <div style={S.card}>
-    <h3 style={S.cardTitle}>🔧 Informations prestataire</h3>
+    <h3 style={S.cardTitle}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+        <Icon as={Wrench} size={18} color={t.primary} />
+        Informations prestataire
+      </span>
+    </h3>
 
     <div style={S.field}>
       <Label required>Tarif (FCFA / heure ou par tâche)</Label>
@@ -567,11 +704,11 @@ const PrestataireSection = memo(({ formData, onChange, errors }) => (
       <Label>Moyen de transport</Label>
       <select name="transportMode" value={formData.transportMode} onChange={onChange} style={S.select(false)}>
         <option value="">Sélectionnez un moyen</option>
-        <option value="moto">🏍️ Moto</option>
-        <option value="voiture">🚗 Voiture</option>
-        <option value="velo">🚲 Vélo</option>
-        <option value="pieds">🚶 À pieds</option>
-        <option value="transport_commun">🚌 Transport en commun</option>
+        <option value="moto">Moto</option>
+        <option value="voiture">Voiture</option>
+        <option value="velo">Vélo</option>
+        <option value="pieds">À pieds</option>
+        <option value="transport_commun">Transport en commun</option>
       </select>
     </div>
 
@@ -588,7 +725,12 @@ const PrestataireSection = memo(({ formData, onChange, errors }) => (
 
 const DemandeurEmploiSection = memo(({ formData, onChange, errors }) => (
   <div style={S.card}>
-    <h3 style={S.cardTitle}>📋 Recherche d'emploi</h3>
+    <h3 style={S.cardTitle}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+        <Icon as={FileText} size={18} color={t.primary} />
+        Recherche d'emploi
+      </span>
+    </h3>
 
     <div style={S.field}>
       <Label required>Type de contrat recherché</Label>
@@ -612,9 +754,9 @@ const DemandeurEmploiSection = memo(({ formData, onChange, errors }) => (
       <Label>Disponibilité</Label>
       <select name="availabilityDelay" value={formData.availabilityDelay} onChange={onChange} style={S.select(false)}>
         <option value="">Quand pouvez-vous commencer ?</option>
-        <option value="immediat">🟢 Immédiatement</option>
-        <option value="1semaine">🟡 Dans 1 semaine</option>
-        <option value="1mois">🟠 Dans 1 mois</option>
+        <option value="immediat">Immédiatement</option>
+        <option value="1semaine">Dans 1 semaine</option>
+        <option value="1mois">Dans 1 mois</option>
       </select>
     </div>
 
@@ -651,7 +793,12 @@ const DemandeurEmploiSection = memo(({ formData, onChange, errors }) => (
 
 const RecruteurSection = memo(({ formData, onChange, errors }) => (
   <div style={S.card}>
-    <h3 style={S.cardTitle}>🏢 Informations entreprise</h3>
+    <h3 style={S.cardTitle}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+        <Icon as={Building2} size={18} color={t.primary} />
+        Informations entreprise
+      </span>
+    </h3>
 
     <div style={S.field}>
       <Label required>Nom de l'entreprise</Label>
@@ -664,14 +811,14 @@ const RecruteurSection = memo(({ formData, onChange, errors }) => (
       <Label>Secteur d'activité</Label>
       <select name="companySector" value={formData.companySector} onChange={onChange} style={S.select(false)}>
         <option value="">Sélectionnez le secteur</option>
-        <option value="construction">🏗️ Construction / BTP</option>
-        <option value="restauration">🍽️ Restauration / Hôtellerie</option>
-        <option value="commerce">🛒 Commerce / Vente</option>
-        <option value="transport">🚚 Transport / Logistique</option>
-        <option value="agriculture">🌾 Agriculture / Pêche</option>
-        <option value="services">🔧 Services / Artisanat</option>
-        <option value="sante">🏥 Santé</option>
-        <option value="education">📚 Éducation / Formation</option>
+        <option value="construction">Construction / BTP</option>
+        <option value="restauration">Restauration / Hôtellerie</option>
+        <option value="commerce">Commerce / Vente</option>
+        <option value="transport">Transport / Logistique</option>
+        <option value="agriculture">Agriculture / Pêche</option>
+        <option value="services">Services / Artisanat</option>
+        <option value="sante">Santé</option>
+        <option value="education">Éducation / Formation</option>
         <option value="autre">Autre</option>
       </select>
     </div>
@@ -699,7 +846,7 @@ const RecruteurSection = memo(({ formData, onChange, errors }) => (
 
 const ClientSection = memo(({ formData, onChange }) => (
   <div style={S.card}>
-    <h3 style={S.cardTitle}>🛍️ Préférences client</h3>
+    <h3 style={S.cardTitle}>Préférences client</h3>
 
     <div style={S.field}>
       <Label>Services recherchés</Label>
@@ -723,8 +870,8 @@ const ClientSection = memo(({ formData, onChange }) => (
       <Label>Type de client</Label>
       <select name="clientType" value={formData.clientType} onChange={onChange} style={S.select(false)}>
         <option value="">Sélectionnez le type</option>
-        <option value="particulier">👤 Particulier (maison / famille)</option>
-        <option value="petite_entreprise">🏪 Petite entreprise</option>
+        <option value="particulier">Particulier (maison / famille)</option>
+        <option value="petite_entreprise">Petite entreprise</option>
       </select>
     </div>
   </div>
@@ -806,7 +953,12 @@ export default function ProfileEdit() {
                 Annuler
               </button>
               <button type="submit" disabled={saving} style={S.btnPrimary(saving)}>
-                {saving ? "⏳ Enregistrement…" : "💾 Enregistrer les modifications"}
+                {saving ? "Enregistrement…" : (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                    <Icon as={Save} size={18} color="white" />
+                    Enregistrer les modifications
+                  </span>
+                )}
               </button>
             </div>
 

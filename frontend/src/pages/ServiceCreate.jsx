@@ -1,12 +1,31 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { supabase } from "../lib/supabase";
+import { Calendar, Coins, FileText, MapPinned } from "lucide-react";
+import { Icon } from "../components/Icon";
+
+const CATEGORIES = [
+  { value: "plomberie", label: "Plomberie" },
+  { value: "electricite", label: "Électricité" },
+  { value: "menuiserie", label: "Menuiserie" },
+  { value: "maconnerie", label: "Maçonnerie" },
+  { value: "peinture", label: "Peinture" },
+  { value: "immobilier", label: "Immobilier" },
+  { value: "mecanique", label: "Mécanique" },
+  { value: "informatique", label: "Informatique" },
+  { value: "nettoyage", label: "Nettoyage" },
+  { value: "restauration", label: "Restauration" },
+  { value: "couture", label: "Couture" },
+  { value: "coiffure", label: "Coiffure" },
+  { value: "cours_particuliers", label: "Cours particuliers" },
+  { value: "demenagement", label: "Déménagement" },
+  { value: "autre", label: "Autre" },
+];
 
 export default function ServiceCreate() {
-  // ✅ authChecked empêche tout render prématuré avant la vérification de session
+  // authChecked empêche tout render prématuré avant la vérification de session
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState(null);
-  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -28,11 +47,8 @@ export default function ServiceCreate() {
   });
 
   useEffect(() => {
-    // ✅ Vérification robuste : token ET user doivent être présents
     const userData = localStorage.getItem("user");
-    const token = localStorage.getItem("token"); // ajustez la clé si besoin
-
-    if (!userData || !token) {
+    if (!userData) {
       navigate("/login");
       return;
     }
@@ -41,48 +57,25 @@ export default function ServiceCreate() {
     try {
       parsedUser = JSON.parse(userData);
     } catch {
-      // JSON corrompu → déconnexion propre
       localStorage.removeItem("user");
-      localStorage.removeItem("token");
       navigate("/login");
       return;
     }
 
     if (!parsedUser?.id || !parsedUser?.role) {
-      // Objet user invalide ou incomplet
       navigate("/login");
       return;
     }
 
     setUser(parsedUser);
-    setAuthChecked(true); // ✅ On sait maintenant que l'utilisateur est authentifié
+    setAuthChecked(true);
 
     if (parsedUser.role !== "prestataire") {
       setError("Seuls les prestataires peuvent créer des services");
       setTimeout(() => navigate("/dashboard"), 2000);
       return;
     }
-
-    // ✅ loadCategories uniquement pour les prestataires confirmés
-    loadCategories();
   }, [navigate]);
-
-  const loadCategories = async () => {
-    try {
-      const response = await api.get("/services/categories");
-      setCategories(response.data.data ?? []);
-    } catch (err) {
-      // ✅ Interception propre des erreurs 401
-      if (err.response?.status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        navigate("/login");
-        return;
-      }
-      console.error("Erreur chargement catégories:", err);
-      // Non bloquant : le formulaire reste utilisable sans catégories dynamiques
-    }
-  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -99,12 +92,10 @@ export default function ServiceCreate() {
   };
 
   const handleSubmit = async (e) => {
-    // ✅ 1. preventDefault explicite en tout premier — avant tout traitement
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    // ✅ 3. Validation catégorie côté client avant d'appeler l'API
     if (!formData.category) {
       setError("Veuillez sélectionner une catégorie avant de publier.");
       return;
@@ -113,44 +104,44 @@ export default function ServiceCreate() {
     setLoading(true);
 
     try {
-      const dataToSend = {
-        ...formData,
-        // ✅ 2. Conversion en nombre pur avec fallback à 0
-        priceMin: formData.priceMin ? Number(formData.priceMin) : 0,
-        priceMax: formData.priceMax ? Number(formData.priceMax) : 0,
-        zones: formData.zones
-          ? formData.zones.split(",").map(z => z.trim()).filter(Boolean)
-          : []
+      const zonesArray = formData.zones
+        ? formData.zones.split(",").map(z => z.trim()).filter(Boolean)
+        : [];
+
+      const dataToInsert = {
+        user_id: user.id,
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        price_type: formData.priceType,
+        price_min: formData.priceMin ? Number(formData.priceMin) : 0,
+        price_max: formData.priceMax ? Number(formData.priceMax) : 0,
+        city: formData.city,
+        region: formData.region,
+        zones: zonesArray,
+        availability: formData.availability,
+        available_days: formData.availableDays,
+        response_time: formData.responseTime,
+        status: "actif",
       };
 
-      // ✅ 4. Debug visuel — inspecte le payload exact envoyé au backend
-      console.log("Payload envoyé au backend:", dataToSend);
+      console.log("Payload envoyé à Supabase:", dataToInsert);
 
-      const response = await api.post("/services", dataToSend);
-      console.log("✅ Service créé:", response.data);
+      const { data, error: insertError } = await supabase
+        .from("services")
+        .insert(dataToInsert)
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
+
+      console.log("Service créé:", data);
 
       setSuccess("Service créé avec succès !");
-      // ✅ 3. Délai réduit à 800ms — assez pour lire le message, sans attente inutile
       setTimeout(() => navigate("/services/me"), 800);
     } catch (err) {
-      console.error("❌ Erreur création service:", err);
-
-      const status = err.response?.status;
-
-      // ✅ 2. Seul le 401 justifie une redirection — le 400 reste sur la page
-      if (status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        navigate("/login");
-        return;
-      }
-
-      // Tous les autres cas (400, 422, 500…) : affichage de l'erreur, pas de redirection
-      if (err.response?.data?.errors?.length) {
-        setError(err.response.data.errors[0].message);
-      } else {
-        setError(err.response?.data?.message || "Erreur lors de la création du service");
-      }
+      console.error("Erreur création service:", err);
+      setError(err.message || "Erreur lors de la création du service");
     } finally {
       setLoading(false);
     }
@@ -178,7 +169,7 @@ export default function ServiceCreate() {
     { value: "dimanche", label: "Dimanche" }
   ];
 
-  // ✅ Garde de rendu : rien ne s'affiche tant que l'auth n'est pas vérifiée
+  // Garde de rendu : rien ne s'affiche tant que l'auth n'est pas vérifiée
   if (!authChecked) {
     return (
       <div style={{ padding: "20px", textAlign: "center", color: "#671E30" }}>
@@ -265,7 +256,10 @@ export default function ServiceCreate() {
             boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
           }}>
             <h3 style={{ margin: "0 0 20px 0", color: "#671E30" }}>
-              📋 Informations générales
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <Icon as={FileText} size={18} color="#671E30" />
+                Informations générales
+              </span>
             </h3>
 
             <div style={{ marginBottom: "15px" }}>
@@ -295,7 +289,7 @@ export default function ServiceCreate() {
                 style={{ width: "100%", padding: "10px", border: "1px solid #ccc", borderRadius: "4px", background: "white" }}
               >
                 <option value="">Sélectionnez une catégorie</option>
-                {categories.map(cat => (
+                {CATEGORIES.map(cat => (
                   <option key={cat.value} value={cat.value}>{cat.label}</option>
                 ))}
               </select>
@@ -327,7 +321,10 @@ export default function ServiceCreate() {
             boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
           }}>
             <h3 style={{ margin: "0 0 20px 0", color: "#671E30" }}>
-              💰 Tarification
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <Icon as={Coins} size={18} color="#671E30" />
+                Tarification
+              </span>
             </h3>
 
             <div style={{ marginBottom: "15px" }}>
@@ -390,7 +387,10 @@ export default function ServiceCreate() {
             boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
           }}>
             <h3 style={{ margin: "0 0 20px 0", color: "#671E30" }}>
-              📍 Zone d'intervention
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <Icon as={MapPinned} size={18} color="#671E30" />
+                Zone d'intervention
+              </span>
             </h3>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
@@ -456,7 +456,10 @@ export default function ServiceCreate() {
             boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
           }}>
             <h3 style={{ margin: "0 0 20px 0", color: "#671E30" }}>
-              📅 Disponibilité
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <Icon as={Calendar} size={18} color="#671E30" />
+                Disponibilité
+              </span>
             </h3>
 
             <div style={{ marginBottom: "15px" }}>
@@ -505,9 +508,9 @@ export default function ServiceCreate() {
                 style={{ width: "100%", padding: "10px", border: "1px solid #ccc", borderRadius: "4px", background: "white" }}
               >
                 <option value="immédiat">⚡ Immédiat (moins de 1h)</option>
-                <option value="24h">📱 Sous 24h</option>
-                <option value="48h">📞 Sous 48h</option>
-                <option value="72h">📧 Sous 72h</option>
+                <option value="24h">Sous 24h</option>
+                <option value="48h">Sous 48h</option>
+                <option value="72h">Sous 72h</option>
               </select>
             </div>
           </div>

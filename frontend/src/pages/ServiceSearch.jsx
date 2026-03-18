@@ -1,10 +1,29 @@
     import { useState, useEffect } from "react";
     import { useNavigate } from "react-router-dom";
-    import api from "../services/api";
+    import { BadgeCheck, Briefcase, MapPinned, MessageSquare, Search, Star, User } from "lucide-react";
+    import { supabase } from "../lib/supabase";
+    import { Icon } from "../components/Icon";
+
+    const CATEGORIES = [
+      { value: "plomberie", label: "Plomberie" },
+      { value: "electricite", label: "Électricité" },
+      { value: "menuiserie", label: "Menuiserie" },
+      { value: "maconnerie", label: "Maçonnerie" },
+      { value: "peinture", label: "Peinture" },
+      { value: "immobilier", label: "Immobilier" },
+      { value: "mecanique", label: "Mécanique" },
+      { value: "informatique", label: "Informatique" },
+      { value: "nettoyage", label: "Nettoyage" },
+      { value: "restauration", label: "Restauration" },
+      { value: "couture", label: "Couture" },
+      { value: "coiffure", label: "Coiffure" },
+      { value: "cours_particuliers", label: "Cours particuliers" },
+      { value: "demenagement", label: "Déménagement" },
+      { value: "autre", label: "Autre" },
+    ];
 
     export default function ServiceSearch() {
     const [services, setServices] = useState([]);
-    const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const navigate = useNavigate();
@@ -17,32 +36,38 @@
     });
 
     useEffect(() => {
-        loadCategories();
         searchServices();
     }, []);
-
-    const loadCategories = async () => {
-        try {
-        const response = await api.get("/services/categories");
-        setCategories(response.data.data);
-        } catch (err) {
-        console.error("Erreur chargement catégories:", err);
-        }
-    };
 
     const searchServices = async () => {
         try {
         setLoading(true);
         setError("");
-        
-        const params = {};
-        if (filters.category) params.category = filters.category;
-        if (filters.city) params.city = filters.city;
-        if (filters.search) params.search = filters.search;
-        if (filters.availability) params.availability = filters.availability;
 
-        const response = await api.get("/services/search", { params });
-        setServices(response.data.data);
+        let query = supabase
+          .from("services")
+          .select("*, profiles(*)")
+          .eq("status", "actif");
+
+        if (filters.category) {
+          query = query.eq("category", filters.category);
+        }
+        if (filters.city) {
+          query = query.eq("city", filters.city);
+        }
+        if (filters.availability) {
+          query = query.eq("availability", filters.availability);
+        }
+        if (filters.search) {
+          query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+        }
+
+        query = query.order("created_at", { ascending: false });
+
+        const { data, error: fetchError } = await query;
+
+        if (fetchError) throw fetchError;
+        setServices(data || []);
         } catch (err) {
         console.error("Erreur recherche:", err);
         setError("Erreur lors de la recherche");
@@ -75,12 +100,12 @@
     };
 
     const getCategoryLabel = (category) => {
-        const cat = categories.find(c => c.value === category);
+        const cat = CATEGORIES.find(c => c.value === category);
         return cat ? cat.label : category;
     };
 
     const villes = [
-        "Dakar", "Pikine", "Guédiawaye", "Rufisque", "Thiès", "Kaolack", 
+        "Dakar", "Pikine", "Guédiawaye", "Rufisque", "Thiès", "Kaolack",
         "Mbour", "Saint-Louis", "Ziguinchor", "Louga", "Matam", "Tambacounda",
         "Kolda", "Kaffrine", "Kédougou", "Sédhiou", "Diourbel", "Fatick"
     ];
@@ -88,7 +113,7 @@
     return (
         <div style={{ minHeight: "100vh", background: "#F0F0E8", padding: "20px" }}>
         <div style={{ maxWidth: "1200px", margin: "0 auto" }}>
-            
+
             {/* En-tête */}
             <div style={{
             background: "white",
@@ -133,7 +158,10 @@
             boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
             }}>
             <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
-                🔍 Filtres de recherche
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                  <Icon as={Search} size={18} color="#671E30" />
+                  Filtres de recherche
+                </span>
             </h3>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))", gap: "15px", marginBottom: "15px" }}>
@@ -154,7 +182,7 @@
                     }}
                 >
                     <option value="">Toutes les catégories</option>
-                    {categories.map(cat => (
+                    {CATEGORIES.map(cat => (
                     <option key={cat.value} value={cat.value}>
                         {cat.label}
                     </option>
@@ -202,8 +230,8 @@
                     }}
                 >
                     <option value="">Tous</option>
-                    <option value="disponible">✅ Disponible</option>
-                    <option value="occupe">⏳ Occupé</option>
+                    <option value="disponible">Disponible</option>
+                    <option value="occupe">Occupé</option>
                 </select>
                 </div>
 
@@ -241,7 +269,10 @@
                     fontWeight: "bold"
                 }}
                 >
-                🔍 Rechercher
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                  <Icon as={Search} size={18} color="white" />
+                  Rechercher
+                </span>
                 </button>
                 <button
                 type="button"
@@ -256,7 +287,7 @@
                     fontWeight: "bold"
                 }}
                 >
-                🔄 Réinitialiser
+                Réinitialiser
                 </button>
             </div>
             </form>
@@ -287,7 +318,9 @@
                 textAlign: "center",
                 boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
             }}>
-                <p style={{ fontSize: "48px", margin: "0 0 20px 0" }}>🔍</p>
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: "14px" }}>
+                  <Icon as={Search} size={46} color="#671E30" />
+                </div>
                 <h3 style={{ margin: "0 0 10px 0", color: "#671E30" }}>
                 Aucun service trouvé
                 </h3>
@@ -322,32 +355,35 @@
                             {getCategoryLabel(service.category)}
                         </p>
                         <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>
-                            📍 {service.city}{service.region && `, ${service.region}`}
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                              <Icon as={MapPinned} size={14} color="#666" />
+                              {service.city}{service.region && `, ${service.region}`}
+                            </span>
                         </p>
                         </div>
                         <div style={{ textAlign: "right" }}>
                         <p style={{ margin: "0 0 5px 0", fontSize: "18px", fontWeight: "bold", color: "#671E30" }}>
-                            {service.priceType === "devis" 
+                            {service.price_type === "devis"
                             ? "Sur devis"
-                            : `${service.priceMin || 0} - ${service.priceMax || 0} FCFA`}
+                            : `${service.price_min || 0} - ${service.price_max || 0} FCFA`}
                         </p>
                         <p style={{ margin: 0, fontSize: "12px", color: "#666" }}>
-                            / {service.priceType}
+                            / {service.price_type}
                         </p>
                         </div>
                     </div>
 
                     <p style={{ margin: "0 0 15px 0", color: "#333", lineHeight: "1.5" }}>
-                        {service.description.length > 150 
-                        ? service.description.substring(0, 150) + "..." 
+                        {service.description.length > 150
+                        ? service.description.substring(0, 150) + "..."
                         : service.description}
                     </p>
 
                     {/* Info prestataire */}
-                    {service.profile && (
-                        <div style={{ 
-                        display: "flex", 
-                        justifyContent: "space-between", 
+                    {service.profiles && (
+                        <div style={{
+                        display: "flex",
+                        justifyContent: "space-between",
                         alignItems: "center",
                         padding: "15px",
                         background: "#F0F0E8",
@@ -356,10 +392,16 @@
                         }}>
                         <div>
                             <p style={{ margin: "0 0 5px 0", fontWeight: "bold", color: "#333" }}>
-                            👤 {service.profile.firstName} {service.profile.lastName}
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                <Icon as={User} size={16} color="#333" />
+                                {service.profiles.first_name} {service.profiles.last_name}
+                              </span>
                             </p>
                             <p style={{ margin: 0, fontSize: "14px", color: "#666" }}>
-                            ⭐ {service.profile.rating}/5 ({service.profile.reviewCount} avis)
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                <Icon as={Star} size={14} color="#666" />
+                                {service.profiles.rating}/5 ({service.profiles.review_count} avis)
+                              </span>
                             </p>
                         </div>
                         <div>
@@ -371,7 +413,14 @@
                             fontSize: "12px",
                             fontWeight: "bold"
                             }}>
-                            {service.availability === "disponible" ? "✅ Disponible" : "⏳ Occupé"}
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                              <Icon
+                                as={service.availability === "disponible" ? BadgeCheck : Briefcase}
+                                size={14}
+                                color={service.availability === "disponible" ? "#2E7D32" : "#9E7C00"}
+                              />
+                              {service.availability === "disponible" ? "Disponible" : "Occupé"}
+                            </span>
                             </span>
                         </div>
                         </div>
@@ -379,13 +428,13 @@
 
                     <button
                         onClick={() => {
-                            const token = localStorage.getItem("token");
-                            if (!token) {
-                            alert("Vous devez être connecté pour contacter un prestataire");
-                            navigate("/login");
-                            return;
+                            const userData = localStorage.getItem("user");
+                            if (!userData) {
+                              alert("Vous devez être connecté pour contacter un prestataire");
+                              navigate("/login");
+                              return;
                             }
-                            navigate(`/messages/${service.userId}`); // ⬅️ MODIFIER
+                            navigate(`/messages/${service.user_id}`);
                         }
                         }
                         style={{
@@ -400,7 +449,10 @@
                         fontSize: "16px"
                         }}
                     >
-                        📞 Contacter
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                          <Icon as={MessageSquare} size={18} color="white" />
+                          Contacter
+                        </span>
                     </button>
                     </div>
                 ))}

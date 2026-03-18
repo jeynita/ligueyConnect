@@ -16,10 +16,10 @@ export default function Register() {
   const navigate = useNavigate();
 
   const roles = [
-    { value: "client", label: "🏠 Client", description: "Je cherche des prestataires" },
-    { value: "prestataire", label: "🔧 Prestataire", description: "Je propose des services" },
-    { value: "demandeur", label: "🔍 Demandeur d'emploi", description: "Je cherche un emploi" },
-    { value: "recruteur", label: "💼 Recruteur", description: "Je publie des offres d'emploi" }
+    { value: "client", label: "Client", description: "Je cherche des prestataires" },
+    { value: "prestataire", label: "Prestataire", description: "Je propose des services" },
+    { value: "demandeur", label: "Demandeur d'emploi", description: "Je cherche un emploi" },
+    { value: "recruteur", label: "Recruteur", description: "Je publie des offres d'emploi" }
   ];
 
   const handleChange = (e) => {
@@ -37,17 +37,15 @@ export default function Register() {
     }
 
     if (formData.password.length < 8) {
-      setError("Le mot de passe doit contenir au moins 8 caractères");
+      setError("Le mot de passe doit contenir au moins 8 caracteres");
       return;
     }
 
     setLoading(true);
 
     try {
-      const data = await register(formData.email, formData.password, formData.role);
-      if (data && data.token) {
-        navigate("/dashboard");
-      }
+      await register(formData.email, formData.password, formData.role);
+      navigate("/dashboard");
     } catch (err) {
       setError(err.message || "Erreur lors de l'inscription");
     } finally {
@@ -73,7 +71,6 @@ export default function Register() {
         maxWidth: "500px"
       }}>
 
-        {/* Logo / Titre */}
         <div style={{ textAlign: "center", marginBottom: "30px" }}>
           <h1 style={{
             margin: "0 0 5px 0",
@@ -81,14 +78,13 @@ export default function Register() {
             fontSize: "32px",
             fontWeight: "bold"
           }}>
-            🇸🇳 Liguey Connect
+            Liguey Connect
           </h1>
           <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>
-            Créez votre compte gratuitement
+            Creez votre compte gratuitement
           </p>
         </div>
 
-        {/* Message d'erreur */}
         {error && (
           <div style={{
             background: "#fee",
@@ -100,13 +96,12 @@ export default function Register() {
             fontSize: "14px",
             textAlign: "center"
           }}>
-            ❌ {error}
+            {error}
           </div>
         )}
 
         <form onSubmit={handleSubmit}>
 
-          {/* Choix du rôle */}
           <div style={{ marginBottom: "20px" }}>
             <label style={{
               display: "block",
@@ -151,7 +146,6 @@ export default function Register() {
             </div>
           </div>
 
-          {/* Email */}
           <div style={{ marginBottom: "15px" }}>
             <label style={{
               display: "block",
@@ -177,12 +171,9 @@ export default function Register() {
                 fontSize: "14px",
                 boxSizing: "border-box"
               }}
-              onFocus={(e) => e.target.style.borderColor = "#671E30"}
-              onBlur={(e) => e.target.style.borderColor = "#ddd"}
             />
           </div>
 
-          {/* Mot de passe */}
           <div style={{ marginBottom: "15px" }}>
             <label style={{
               display: "block",
@@ -199,7 +190,7 @@ export default function Register() {
                 name="password"
                 value={formData.password}
                 onChange={handleChange}
-                placeholder="Minimum 8 caractères"
+                placeholder="Minimum 8 caracteres"
                 required
                 style={{
                   width: "100%",
@@ -210,8 +201,6 @@ export default function Register() {
                   fontSize: "14px",
                   boxSizing: "border-box"
                 }}
-                onFocus={(e) => e.target.style.borderColor = "#671E30"}
-                onBlur={(e) => e.target.style.borderColor = "#ddd"}
               />
               <button
                 type="button"
@@ -229,17 +218,15 @@ export default function Register() {
                   padding: "0",
                   lineHeight: "1"
                 }}
-                title={showPassword ? "Cacher le mot de passe" : "Voir le mot de passe"}
               >
-                {showPassword ? "🙈" : "👁️"}
+                {showPassword ? "x" : "o"}
               </button>
             </div>
             <p style={{ margin: "5px 0 0 0", fontSize: "11px", color: "#999" }}>
-              Doit contenir au moins 8 caractères, une majuscule, une minuscule et un chiffre
+              Doit contenir au moins 8 caracteres
             </p>
           </div>
 
-          {/* Confirmer mot de passe */}
           <div style={{ marginBottom: "25px" }}>
             <label style={{
               display: "block",
@@ -290,24 +277,12 @@ export default function Register() {
                   padding: "0",
                   lineHeight: "1"
                 }}
-                title={showConfirmPassword ? "Cacher le mot de passe" : "Voir le mot de passe"}
               >
-                {showConfirmPassword ? "🙈" : "👁️"}
+                {showConfirmPassword ? "x" : "o"}
               </button>
             </div>
-            {formData.confirmPassword && formData.password !== formData.confirmPassword && (
-              <p style={{ margin: "5px 0 0 0", fontSize: "12px", color: "#c33" }}>
-                ❌ Les mots de passe ne correspondent pas
-              </p>
-            )}
-            {formData.confirmPassword && formData.password === formData.confirmPassword && (
-              <p style={{ margin: "5px 0 0 0", fontSize: "12px", color: "#3c3" }}>
-                ✅ Les mots de passe correspondent
-              </p>
-            )}
           </div>
 
-          {/* Bouton inscription */}
           <button
             type="submit"
             disabled={loading}
@@ -324,17 +299,14 @@ export default function Register() {
               marginBottom: "15px",
               transition: "background 0.2s"
             }}
-            onMouseEnter={(e) => { if (!loading) e.target.style.background = "#8B2940" }}
-            onMouseLeave={(e) => { if (!loading) e.target.style.background = "#671E30" }}
           >
-            {loading ? "⏳ Création du compte..." : "Créer mon compte"}
+            {loading ? "Creation du compte..." : "Creer mon compte"}
           </button>
         </form>
 
-        {/* Lien connexion */}
         <div style={{ textAlign: "center" }}>
           <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>
-            Déjà un compte ?{" "}
+            Deja un compte ?{" "}
             <button
               onClick={() => navigate("/login")}
               style={{

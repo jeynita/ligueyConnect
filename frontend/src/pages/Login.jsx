@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { login } from "../services/api";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -16,17 +16,10 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const response = await api.post("/auth/login", { email, password });
-
-      if (response.data.success) {
-        localStorage.setItem("token", response.data.data.token);
-        localStorage.setItem("user", JSON.stringify(response.data.data.user));
-        navigate("/dashboard");
-      } else {
-        setError(response.data.message || "Email ou mot de passe incorrect");
-      }
+      await login(email, password);
+      navigate("/dashboard");
     } catch (err) {
-      setError(err.response?.data?.message || "Erreur de connexion");
+      setError(err.message || "Email ou mot de passe incorrect");
     } finally {
       setLoading(false);
     }
@@ -52,10 +45,10 @@ export default function Login() {
 
         <div style={{ textAlign: "center", marginBottom: "30px" }}>
           <h1 style={{ margin: "0 0 5px 0", color: "#671E30", fontSize: "32px" }}>
-            🇸🇳 Liguey Connect
+            Liguey Connect
           </h1>
           <p style={{ margin: 0, color: "#666", fontSize: "14px" }}>
-            Connectez-vous à votre compte
+            Connectez-vous a votre compte
           </p>
         </div>
 
@@ -70,7 +63,7 @@ export default function Login() {
             fontSize: "14px",
             textAlign: "center"
           }}>
-            ❌ {error}
+            {error}
           </div>
         )}
 
@@ -146,7 +139,7 @@ export default function Login() {
                   padding: "0"
                 }}
               >
-                {showPassword ? "🙈" : "👁️"}
+                {showPassword ? "x" : "o"}
               </button>
             </div>
           </div>
@@ -165,7 +158,7 @@ export default function Login() {
                 padding: "0"
               }}
             >
-              Mot de passe oublié ?
+              Mot de passe oublie ?
             </button>
           </div>
 
@@ -185,7 +178,7 @@ export default function Login() {
               marginBottom: "15px"
             }}
           >
-            {loading ? "⏳ Connexion..." : "Se connecter"}
+            {loading ? "Connexion..." : "Se connecter"}
           </button>
         </form>
 

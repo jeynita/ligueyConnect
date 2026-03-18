@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import api from "../services/api";
+import { supabase } from "../lib/supabase";
+import { Building2, FileText, MapPinned, Coins, Send, Search, User, Phone, Briefcase } from "lucide-react";
+import { Icon } from "../components/Icon";
 
-// ─── Fonctions utilitaires (mêmes que OffreSearch.jsx) ───────────────────────
+// ─── Fonctions utilitaires ──────────────────────────────────────────────────
 
-// ✅ Normalise skills quelle que soit la forme renvoyée par le backend
+// Normalise skills quelle que soit la forme
 const parseSkills = (skills) => {
   if (!skills) return [];
   if (Array.isArray(skills)) return skills.filter(Boolean);
@@ -14,12 +16,12 @@ const parseSkills = (skills) => {
   return [];
 };
 
-// ✅ Formate le salaire en toute sécurité
+// Formate le salaire en toute sécurité
 const formatSalary = (offre) => {
-  const period = offre.salaryPeriod ?? offre.salary_period;
+  const period = offre.salary_period;
   if (period === "a_negocier") return { text: "À négocier", sub: null };
-  const min = offre.salaryMin ?? offre.salary_min;
-  const max = offre.salaryMax ?? offre.salary_max;
+  const min = offre.salary_min;
+  const max = offre.salary_max;
   if (!min && !max) return null;
   const range = min && max
     ? `${Number(min).toLocaleString("fr-FR")} – ${Number(max).toLocaleString("fr-FR")} FCFA`
@@ -48,7 +50,7 @@ export default function OffrePostuler() {
   const [success, setSuccess]     = useState("");
   const navigate = useNavigate();
 
-  // ✅ Correspond à /offres/:offreId/postuler dans App.jsx
+  // Correspond à /offres/:offreId/postuler dans App.jsx
   const { offreId } = useParams();
 
   const [formData, setFormData] = useState({
@@ -59,15 +61,12 @@ export default function OffrePostuler() {
   // ── Auth + chargement ────────────────────────────────────────────────────
   useEffect(() => {
     const userData = localStorage.getItem("user");
-    const token    = localStorage.getItem("token");
-
-    if (!userData || !token) { navigate("/login"); return; }
+    if (!userData) { navigate("/login"); return; }
 
     let parsedUser;
     try { parsedUser = JSON.parse(userData); }
     catch {
       localStorage.removeItem("user");
-      localStorage.removeItem("token");
       navigate("/login");
       return;
     }
@@ -79,29 +78,36 @@ export default function OffrePostuler() {
     }
 
     loadOffre();
-    loadProfile();
+    loadProfile(parsedUser.id);
   }, [offreId, navigate]);
 
   const loadOffre = async () => {
     try {
-      const response = await api.get(`/offres/${offreId}`);
-      setOffre(response.data.data ?? response.data ?? null);
+      const { data, error: sbError } = await supabase
+        .from("offres")
+        .select("*, profiles(*)")
+        .eq("id", offreId)
+        .single();
+
+      if (sbError) throw sbError;
+
+      setOffre(data);
     } catch (err) {
-      if (err.response?.status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        navigate("/login");
-        return;
-      }
       console.error("Erreur chargement offre:", err);
       setError("Impossible de charger l'offre. Vérifiez que le lien est correct.");
     }
   };
 
-  const loadProfile = async () => {
+  const loadProfile = async (userId) => {
     try {
-      const response = await api.get("/profiles/me");
-      const data = response.data.data ?? response.data ?? null;
+      const { data, error: sbError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (sbError) throw sbError;
+
       setProfile(data);
       // Pré-remplir cvText si le profil contient une expérience
       if (data?.experience) {
@@ -125,7 +131,7 @@ export default function OffrePostuler() {
     setError("");
     setSuccess("");
 
-    // ✅ Validation : candidature totalement vide
+    // Validation : candidature totalement vide
     const isEmpty = !formData.coverLetter.trim() && !formData.cvText.trim();
     if (isEmpty) {
       setError("Votre candidature est vide. Ajoutez une lettre de motivation ou décrivez votre expérience avant d'envoyer.");
@@ -135,28 +141,49 @@ export default function OffrePostuler() {
     setSubmitting(true);
 
     try {
-      const response = await api.post(`/offres/${offreId}/postuler`, formData);
-      console.log("✅ Candidature envoyée:", response.data);
+      const user = JSON.parse(localStorage.getItem("user"));
+
+      // Insérer la candidature
+      const { data, error: sbError } = await supabase
+        .from("candidatures")
+        .insert({
+          offre_id: offreId,
+          candidat_id: user.id,
+          cover_letter: formData.coverLetter || null,
+          cv_text: formData.cvText || null,
+        })
+        .select()
+        .single();
+
+      if (sbError) {
+        // Handle unique constraint violation (duplicate candidature)
+        if (sbError.code === "23505") {
+          setError("Vous avez déjà postulé à cette offre.");
+          return;
+        }
+        throw sbError;
+      }
+
+      // Increment application_count on the offre
+      const { data: currentOffre } = await supabase
+        .from("offres")
+        .select("application_count")
+        .eq("id", offreId)
+        .single();
+
+      await supabase
+        .from("offres")
+        .update({ application_count: (currentOffre?.application_count ?? 0) + 1 })
+        .eq("id", offreId);
+
+      console.log("Candidature envoyee:", data);
 
       setSuccess("Votre candidature a été envoyée avec succès !");
       setTimeout(() => navigate("/candidatures"), 2000);
 
     } catch (err) {
-      console.error("❌ Erreur candidature:", err);
-
-      if (err.response?.status === 401) {
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        navigate("/login");
-        return;
-      }
-
-      if (err.response?.status === 409) {
-        setError("Vous avez déjà postulé à cette offre.");
-        return;
-      }
-
-      setError(err.response?.data?.message || "Erreur lors de l'envoi de la candidature. Veuillez réessayer.");
+      console.error("Erreur candidature:", err);
+      setError(err.message || "Erreur lors de l'envoi de la candidature. Veuillez réessayer.");
     } finally {
       setSubmitting(false);
     }
@@ -174,7 +201,9 @@ export default function OffrePostuler() {
   if (!offre) {
     return (
       <div style={{ padding: "40px", textAlign: "center" }}>
-        <p style={{ fontSize: "48px", margin: "0 0 16px 0" }}>🔍</p>
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "14px" }}>
+          <Icon as={Search} size={46} color="#671E30" />
+        </div>
         <h3 style={{ color: "#671E30" }}>Offre introuvable</h3>
         <p style={{ color: "#666", marginBottom: "20px" }}>
           Cette offre n'existe plus ou le lien est incorrect.
@@ -193,9 +222,9 @@ export default function OffrePostuler() {
   // ── Données normalisées ──────────────────────────────────────────────────
   const skills      = parseSkills(offre.skills);
   const salary      = formatSalary(offre);
-  const contractKey = offre.contractType ?? offre.contract_type;
+  const contractKey = offre.contract_type;
   const contractStyle = CONTRACT_COLORS[contractKey] || { bg: "#F0F0E8", color: "#333" };
-  const companyName = offre.companyName ?? offre.company_name ?? null;
+  const companyName = offre.company_name ?? null;
 
   return (
     <div style={{ minHeight: "100vh", background: "#F0F0E8", padding: "20px" }}>
@@ -243,7 +272,12 @@ export default function OffrePostuler() {
         <div style={{ background: "white", padding: "20px", borderRadius: "8px",
           marginBottom: "20px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
           borderTop: "4px solid #671E30" }}>
-          <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>📋 Détails de l'offre</h3>
+          <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+              <Icon as={FileText} size={18} color="#671E30" />
+              Détails de l'offre
+            </span>
+          </h3>
 
           <h2 style={{ margin: "0 0 12px 0", color: "#671E30", fontSize: "21px" }}>
             {offre.title}
@@ -261,14 +295,20 @@ export default function OffrePostuler() {
             </span>
             <span style={{ background: "#F0F0E8", color: "#555",
               padding: "4px 10px", borderRadius: "20px", fontSize: "12px" }}>
-              📍 {offre.city ?? "—"}{offre.region ? `, ${offre.region}` : ""}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                <Icon as={MapPinned} size={14} color="#555" />
+                {offre.city ?? "—"}{offre.region ? `, ${offre.region}` : ""}
+              </span>
             </span>
             {companyName && (
               <span style={{ background: "#FFF8EC", color: "#CFA65B",
                 padding: "4px 10px", borderRadius: "20px",
                 fontSize: "12px", fontWeight: "600",
                 border: "1px solid #CFA65B44" }}>
-                🏢 {companyName}
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <Icon as={Building2} size={14} color="#CFA65B" />
+                  {companyName}
+                </span>
               </span>
             )}
           </div>
@@ -282,7 +322,10 @@ export default function OffrePostuler() {
           {/* Salaire */}
           {salary && (
             <p style={{ margin: "0 0 12px 0", fontSize: "16px", fontWeight: "bold", color: "#671E30" }}>
-              💰 {salary.text}
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <Icon as={Coins} size={18} color="#671E30" />
+                {salary.text}
+              </span>
               {salary.sub && (
                 <span style={{ fontSize: "13px", color: "#888", fontWeight: "normal" }}>
                   {" "}{salary.sub}
@@ -295,7 +338,7 @@ export default function OffrePostuler() {
           {skills.length > 0 && (
             <div style={{ marginTop: "14px" }}>
               <p style={{ margin: "0 0 8px 0", fontSize: "13px", color: "#666", fontWeight: "bold" }}>
-                🎯 Compétences requises :
+                Compétences requises :
               </p>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "5px" }}>
                 {skills.map((skill, i) => (
@@ -315,29 +358,43 @@ export default function OffrePostuler() {
         {profile && (
           <div style={{ background: "white", padding: "20px", borderRadius: "8px",
             marginBottom: "20px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
-            <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>👤 Vos informations</h3>
+            <h3 style={{ margin: "0 0 15px 0", color: "#671E30" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <Icon as={User} size={18} color="#671E30" />
+                Vos informations
+              </span>
+            </h3>
             <div style={{ padding: "14px", background: "#F0F0E8", borderRadius: "4px" }}>
               <p style={{ margin: "0 0 5px 0", fontWeight: "bold", color: "#333" }}>
-                {[profile.firstName, profile.lastName].filter(Boolean).join(" ") || "—"}
+                {[profile.first_name, profile.last_name].filter(Boolean).join(" ") || "—"}
               </p>
               {profile.phone && (
                 <p style={{ margin: "0 0 4px 0", fontSize: "14px", color: "#555" }}>
-                  📞 {profile.phone}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <Icon as={Phone} size={14} color="#555" />
+                    {profile.phone}
+                  </span>
                 </p>
               )}
-              {(profile.city ?? profile.ville) && (
+              {profile.city && (
                 <p style={{ margin: "0 0 4px 0", fontSize: "14px", color: "#555" }}>
-                  📍 {profile.city ?? profile.ville}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <Icon as={MapPinned} size={14} color="#555" />
+                    {profile.city}
+                  </span>
                 </p>
               )}
               {profile.profession && (
                 <p style={{ margin: 0, fontSize: "14px", color: "#555" }}>
-                  💼 {profile.profession}
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <Icon as={Briefcase} size={14} color="#555" />
+                    {profile.profession}
+                  </span>
                 </p>
               )}
             </div>
             <p style={{ marginTop: "10px", fontSize: "12px", color: "#888" }}>
-              💡 Complétez votre profil pour augmenter vos chances d'être retenu.
+              Complétez votre profil pour augmenter vos chances d'être retenu.
             </p>
           </div>
         )}
@@ -346,7 +403,7 @@ export default function OffrePostuler() {
         <form onSubmit={handleSubmit}>
           <div style={{ background: "white", padding: "20px", borderRadius: "8px",
             marginBottom: "20px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
-            <h3 style={{ margin: "0 0 20px 0", color: "#671E30" }}>✉️ Votre candidature</h3>
+            <h3 style={{ margin: "0 0 20px 0", color: "#671E30" }}>Votre candidature</h3>
 
             <div style={{ marginBottom: "15px" }}>
               <label style={{ display: "block", marginBottom: "5px",
@@ -406,7 +463,12 @@ export default function OffrePostuler() {
                 cursor: submitting ? "not-allowed" : "pointer",
                 opacity: submitting ? 0.6 : 1 }}
             >
-              {submitting ? "Envoi en cours..." : "📨 Envoyer ma candidature"}
+              {submitting ? "Envoi en cours..." : (
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                  <Icon as={Send} size={18} color="white" />
+                  Envoyer ma candidature
+                </span>
+              )}
             </button>
           </div>
         </form>

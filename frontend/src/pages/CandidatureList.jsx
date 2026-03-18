@@ -1,16 +1,10 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { supabase } from "../lib/supabase";
+import { Building2, FileText, MapPinned, Search, Eye, BadgeCheck, BadgeX, Clock, PartyPopper } from "lucide-react";
+import { Icon } from "../components/Icon";
 
-// ✅ Extrait le tableau de données quelle que soit la structure de la réponse
-const extractData = (responseData) => {
-  if (!responseData) return [];
-  if (Array.isArray(responseData)) return responseData;
-  if (Array.isArray(responseData.data)) return responseData.data;
-  return [];
-};
-
-// ✅ Formate une date en toute sécurité
+// Formate une date en toute securite
 const formatDate = (dateStr) => {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
@@ -20,20 +14,20 @@ const formatDate = (dateStr) => {
   });
 };
 
-// ✅ Normalise le statut : gère majuscules, tirets, espaces
+// Normalise le statut : gere majuscules, tirets, espaces
 const normalizeStatus = (status) => {
   if (!status) return "en_attente";
   return status.toLowerCase().replace(/[\s-]/g, "_");
 };
 
 const STATUS_STYLES = {
-  en_attente: { bg: "#FFF8E1", color: "#9E7C00", text: "⏳ En attente",  border: "#FFE082" },
-  vue:        { bg: "#EDE7F6", color: "#4527A0", text: "👁️ Vue",         border: "#B39DDB" },
-  retenue:    { bg: "#EDFAED", color: "#2E7D32", text: "✅ Retenue",      border: "#A5D6A7" },
-  rejetee:    { bg: "#FDECEA", color: "#C62828", text: "❌ Rejetée",      border: "#EF9A9A" },
+  en_attente: { bg: "#FFF8E1", color: "#9E7C00", text: "En attente",  border: "#FFE082", icon: Clock },
+  vue:        { bg: "#EDE7F6", color: "#4527A0", text: "Vue",         border: "#B39DDB", icon: Eye },
+  retenue:    { bg: "#EDFAED", color: "#2E7D32", text: "Retenue",      border: "#A5D6A7", icon: BadgeCheck },
+  rejetee:    { bg: "#FDECEA", color: "#C62828", text: "Rejetée",      border: "#EF9A9A", icon: BadgeX },
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
+// --------------------------------------------------------------------------
 
 export default function CandidatureList() {
   const [candidatures, setCandidatures] = useState([]);
@@ -41,17 +35,10 @@ export default function CandidatureList() {
   const [error, setError]               = useState("");
   const navigate = useNavigate();
 
-  // ── Auth ────────────────────────────────────────────────────────────────
+  // -- Auth ----------------------------------------------------------------
   useEffect(() => {
     const userData = localStorage.getItem("user");
-    const token    = localStorage.getItem("token");
-
-    console.log("DEBUG AUTH:", userData);
-    console.log("DEBUG TOKEN:", token ? "présent" : "ABSENT");
-
-    // ✅ Ne jamais rediriger — afficher l'erreur sur la page pour diagnostiquer
-    if (!userData || !token) {
-      console.warn("⚠️ userData ou token manquant");
+    if (!userData) {
       setError("Session introuvable. Veuillez vous reconnecter.");
       setLoading(false);
       return;
@@ -60,72 +47,49 @@ export default function CandidatureList() {
     let parsedUser;
     try {
       parsedUser = JSON.parse(userData);
-      console.log("✅ parsedUser:", parsedUser);
     } catch (e) {
-      console.error("❌ JSON corrompu:", e);
       setError("Données de session corrompues. Veuillez vous reconnecter.");
       setLoading(false);
       return;
     }
 
-    // ✅ Vérification flexible : role à la racine OU dans parsedUser.user
     const role = parsedUser?.role ?? parsedUser?.user?.role;
-    console.log("🔍 Rôle détecté:", role);
 
     if (!role) {
-      console.warn("⚠️ Rôle introuvable. Structure parsedUser:", JSON.stringify(parsedUser));
       setError(`Rôle utilisateur introuvable. Structure reçue : ${JSON.stringify(parsedUser)}`);
       setLoading(false);
       return;
     }
 
-    if (role !== "demandeur") {
-      console.warn(`⚠️ Rôle "${role}" — chargement quand même pour diagnostiquer`);
-      // ✅ On charge quand même pour voir l'erreur API réelle au lieu de rediriger
-    }
-
-    loadCandidatures();
+    loadCandidatures(parsedUser.id ?? parsedUser.user?.id);
   }, [navigate]);
 
-  // ── Chargement ──────────────────────────────────────────────────────────
-  const loadCandidatures = async () => {
+  // -- Chargement ----------------------------------------------------------
+  const loadCandidatures = async (userId) => {
     try {
       setLoading(true);
       setError("");
-      // ✅ Route confirmée fonctionnelle
-      const response = await api.get("/offres/candidatures");
 
-      // ✅ Debug — inspecte la structure exacte renvoyée par le backend
-      console.log("📦 response.data brut:", response.data);
+      const { data, error: sbError } = await supabase
+        .from("candidatures")
+        .select("*, offres(*, profiles(*))")
+        .eq("candidat_id", userId)
+        .order("created_at", { ascending: false });
 
-      // ✅ Guard : réponse vide ou inattendue du serveur
-      if (!response.data) {
-        console.warn("⚠️ Le serveur a répondu sans données.");
-        setError("Le serveur n'a renvoyé aucune donnée. Vérifiez l'endpoint backend.");
+      if (sbError) {
+        setError(`Erreur Supabase : ${sbError.message}`);
         return;
       }
 
-      const data = extractData(response.data);
-      console.log(`✅ ${data.length} candidature(s) extraite(s)`);
-      setCandidatures(data);
-
+      setCandidatures(data || []);
     } catch (err) {
-      // ✅ Affichage de l'erreur sur la page — PAS de redirection automatique
-      // Cela permet de voir le vrai code d'erreur (401, 403, 404, 500) en prod
-      const status  = err.response?.status;
-      const message = err.response?.data?.message;
-
-      console.error("❌ Erreur chargement candidatures:", { status, message, data: err.response?.data });
-
-      setError(
-        `Erreur ${status ?? "réseau"} : ${message ?? "Impossible de charger vos candidatures."} — Voir la console pour les détails.`
-      );
+      setError(`Erreur réseau : ${err.message ?? "Impossible de charger vos candidatures."}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Helpers ─────────────────────────────────────────────────────────────
+  // -- Helpers -------------------------------------------------------------
   const getStatusBadge = (rawStatus) => {
     const key   = normalizeStatus(rawStatus);
     const style = STATUS_STYLES[key] || STATUS_STYLES.en_attente;
@@ -136,23 +100,24 @@ export default function CandidatureList() {
         fontSize: "12px", fontWeight: "700",
         border: `1px solid ${style.border}`,
         whiteSpace: "nowrap",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
       }}>
+        <Icon as={style.icon} size={14} color={style.color} />
         {style.text}
       </span>
     );
   };
 
-  // ✅ Cherche le nom d'entreprise dans les deux emplacements possibles
   const getCompanyName = (offre) => {
     if (!offre) return null;
-    return offre.companyName
-      ?? offre.company_name
-      ?? offre.profile?.companyName
-      ?? offre.profile?.company_name
+    return offre.company_name
+      ?? offre.profiles?.company_name
       ?? null;
   };
 
-  // ── Rendu ────────────────────────────────────────────────────────────────
+  // -- Rendu ---------------------------------------------------------------
   if (loading) {
     return (
       <div style={{ padding: "40px", textAlign: "center", color: "#671E30", fontSize: "16px" }}>
@@ -165,7 +130,7 @@ export default function CandidatureList() {
     <div style={{ minHeight: "100vh", background: "#F0F0E8", padding: "20px" }}>
       <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
 
-        {/* En-tête */}
+        {/* En-tete */}
         <div style={{
           background: "white", padding: "20px", borderRadius: "8px",
           marginBottom: "20px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
@@ -191,7 +156,10 @@ export default function CandidatureList() {
               style={{ padding: "10px 20px", background: "#671E30", color: "white",
                 border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}
             >
-              🔍 Chercher des offres
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <Icon as={Search} size={18} color="white" />
+                Chercher des offres
+              </span>
             </button>
           </div>
         </div>
@@ -204,11 +172,13 @@ export default function CandidatureList() {
           </div>
         )}
 
-        {/* État vide */}
+        {/* Etat vide */}
         {candidatures.length === 0 ? (
           <div style={{ background: "white", padding: "60px 40px", borderRadius: "8px",
             textAlign: "center", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}>
-            <p style={{ fontSize: "56px", margin: "0 0 16px 0" }}>📨</p>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "14px" }}>
+              <Icon as={FileText} size={52} color="#671E30" />
+            </div>
             <h3 style={{ margin: "0 0 10px 0", color: "#671E30", fontSize: "20px" }}>
               Aucune candidature envoyée
             </h3>
@@ -223,14 +193,17 @@ export default function CandidatureList() {
                 color: "white", border: "none", borderRadius: "4px",
                 cursor: "pointer", fontWeight: "bold", fontSize: "15px" }}
             >
-              🔍 Trouver une offre
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                <Icon as={Search} size={18} color="white" />
+                Trouver une offre
+              </span>
             </button>
           </div>
 
         ) : (
           <div style={{ display: "grid", gap: "16px" }}>
             {candidatures.map(candidature => {
-              const offre       = candidature.offre ?? candidature.Offre ?? null;
+              const offre       = candidature.offres ?? null;
               const companyName = getCompanyName(offre);
               const statusKey   = normalizeStatus(candidature.status);
               const statusStyle = STATUS_STYLES[statusKey] || STATUS_STYLES.en_attente;
@@ -253,7 +226,7 @@ export default function CandidatureList() {
                         <div style={{ display: "flex", gap: "8px", alignItems: "center",
                           flexWrap: "wrap", marginBottom: "8px" }}>
                           <h3 style={{ margin: 0, color: "#671E30", fontSize: "18px" }}>
-                            {offre?.title ?? candidature.offreTitle ?? "Offre non disponible"}
+                            {offre?.title ?? "Offre non disponible"}
                           </h3>
                           {getStatusBadge(candidature.status)}
                         </div>
@@ -261,15 +234,24 @@ export default function CandidatureList() {
                         {offre && (
                           <div style={{ display: "flex", gap: "14px", flexWrap: "wrap",
                             fontSize: "13px", color: "#666" }}>
-                            {(offre.city ?? offre.ville) && (
-                              <span>📍 {offre.city ?? offre.ville}</span>
+                            {offre.city && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                <Icon as={MapPinned} size={14} color="#666" />
+                                {offre.city}
+                              </span>
                             )}
-                            {(offre.contractType ?? offre.contract_type) && (
-                              <span>📄 {offre.contractType ?? offre.contract_type}</span>
+                            {offre.contract_type && (
+                              <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                <Icon as={FileText} size={14} color="#666" />
+                                {offre.contract_type}
+                              </span>
                             )}
                             {companyName && (
                               <span style={{ color: "#CFA65B", fontWeight: "600" }}>
-                                🏢 {companyName}
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                  <Icon as={Building2} size={14} color="#CFA65B" />
+                                  {companyName}
+                                </span>
                               </span>
                             )}
                           </div>
@@ -283,23 +265,23 @@ export default function CandidatureList() {
                           Envoyée le
                         </p>
                         <p style={{ margin: 0, fontSize: "13px", fontWeight: "600", color: "#333" }}>
-                          {formatDate(candidature.createdAt ?? candidature.created_at)}
+                          {formatDate(candidature.created_at)}
                         </p>
                       </div>
                     </div>
 
-                    {/* Lettre de motivation tronquée */}
-                    {candidature.coverLetter && (
+                    {/* Lettre de motivation tronquee */}
+                    {candidature.cover_letter && (
                       <div style={{ padding: "12px 14px", background: "#F0F0E8",
                         borderRadius: "4px", marginBottom: "12px" }}>
                         <p style={{ margin: "0 0 6px 0", fontSize: "12px",
                           color: "#888", fontWeight: "bold", textTransform: "uppercase" }}>
-                          💌 Lettre de motivation
+                          Lettre de motivation
                         </p>
                         <p style={{ margin: 0, color: "#333", fontSize: "14px", lineHeight: "1.6" }}>
-                          {candidature.coverLetter.length > 220
-                            ? candidature.coverLetter.substring(0, 220).trimEnd() + "…"
-                            : candidature.coverLetter}
+                          {candidature.cover_letter.length > 220
+                            ? candidature.cover_letter.substring(0, 220).trimEnd() + "…"
+                            : candidature.cover_letter}
                         </p>
                       </div>
                     )}
@@ -309,7 +291,10 @@ export default function CandidatureList() {
                       <div style={{ background: "#EDFAED", border: "1px solid #A5D6A7",
                         padding: "14px", borderRadius: "4px" }}>
                         <p style={{ margin: 0, color: "#2E7D32", fontWeight: "bold" }}>
-                          🎉 Félicitations ! Votre candidature a été retenue.
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                            <Icon as={PartyPopper} size={16} color="#2E7D32" />
+                            Félicitations ! Votre candidature a été retenue.
+                          </span>
                         </p>
                         <p style={{ margin: "5px 0 0 0", fontSize: "14px", color: "#388E3C" }}>
                           Le recruteur devrait vous contacter prochainement.
@@ -333,7 +318,10 @@ export default function CandidatureList() {
                       <div style={{ background: "#EDE7F6", border: "1px solid #B39DDB",
                         padding: "14px", borderRadius: "4px" }}>
                         <p style={{ margin: 0, color: "#4527A0", fontSize: "14px" }}>
-                          👁️ Le recruteur a consulté votre candidature. En attente de retour.
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
+                            <Icon as={Eye} size={16} color="#4527A0" />
+                            Le recruteur a consulté votre candidature. En attente de retour.
+                          </span>
                         </p>
                       </div>
                     )}
