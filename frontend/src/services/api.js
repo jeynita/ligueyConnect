@@ -24,24 +24,36 @@ export const login = async (email, password) => {
 };
 
 export const register = async (email, password, role) => {
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { role },
-      emailRedirectTo: `${window.location.origin}/login`,
-    },
-  });
-  if (error) throw new Error(error.message);
+  try {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { role },
+        emailRedirectTo: `${window.location.origin}/login`,
+        // Désactiver la confirmation email pour le développement
+        skipEmailConfirmation: true,
+      },
+    });
+    
+    if (error) {
+      if (error.message.includes('rate limit')) {
+        throw new Error("Limite d'emails dépassée. Veuillez attendre 15 minutes avant de réessayer.");
+      }
+      throw new Error(error.message);
+    }
 
-  const user = {
-    id: data.user.id,
-    email: data.user.email,
-    role: role || "client",
-  };
+    const user = {
+      id: data.user.id,
+      email: data.user.email,
+      role: role || "client",
+    };
 
-  localStorage.setItem("user", JSON.stringify(user));
-  return { user, session: data.session };
+    localStorage.setItem("user", JSON.stringify(user));
+    return { user, session: data.session };
+  } catch (error) {
+    throw error;
+  }
 };
 
 export const logout = async () => {
