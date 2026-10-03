@@ -9,7 +9,7 @@
 ![Sequelize](https://img.shields.io/badge/Sequelize-52B0E7?style=flat-square&logo=sequelize&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white)
 
-Démo en ligne : < liguey-connect.vercel.app >
+Démo en ligne : Le lien se trouve dans la section about du repo
 
 ## Présentation
 
